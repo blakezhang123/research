@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIMS Data Analyzer Pro (V3.2)</title>
+    <style>
+        :root {
+            --bg-color: #f4f4f9;
+            --panel-bg: #ffffff;
+            --primary-color: #2196F3;
+            --text-color: #333;
+            --border-color: #ddd;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+        }
+        /* 左侧控制面板 */
+        #sidebar {
+            width: 300px;
+            background: var(--panel-bg);
+            padding: 20px;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            z-index: 10;
+            border-right: 1px solid var(--border-color);
+        }
+        h2 { margin: 0 0 10px 0; color: #444; font-size: 1.4em; }
+        h3 { margin: 0 0 10px 0; color: #555; font-size: 1.1em; }
+        
+        .control-group {
+            border: 1px solid #eee;
+            padding: 15px;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        label { display: block; margin-bottom: 5px; font-weight: 500; font-size: 0.9em; }
+        input[type="number"], input[type="text"], input[type="range"] {
+            width: 100%;
+            box-sizing: border-box;
+        }
+        input[type="number"], input[type="text"] {
+            padding: 6px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+            width: 100%;
+        }
+        button:hover { background: #1976D2; }
+        button.secondary { background: #757575; margin-top: 5px; }
+        button.secondary:hover { background: #616161; }
+        
+        .slider-container { margin: 10px 0; }
+        .val-display { font-size: 0.85em; color: #666; float: right; }
+        
+        /* 坐标显示样式 */
+        .coord-display {
+            font-family: Consolas, monospace;
+            font-size: 0.9em;
+            background: #fff;
+            border: 1px solid #ccc;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .coord-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+        .coord-label { font-weight: bold; color: #555; }
+
+        /* 主界面布局 */
+        #main-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #e0e0e0;
+            overflow: hidden;
+        }
+
+        /* 顶部元数据显示区 */
+        #metadata-panel {
+            background: white;
+            padding: 10px 20px;
+            border-bottom: 1px solid #ccc;
+            display: none; 
+            flex-shrink: 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        #metadata-title {
+            font-weight: bold; margin-bottom: 5px; cursor: pointer;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        #metadata-content {
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 0.9em;
+            color: #444;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 5px 20px;
+            margin-top: 5px;
+        }
+        .meta-item { border-bottom: 1px dashed #eee; padding: 2px 0; }
+        .meta-key { color: #888; }
+
+        /* 画布区域 */
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            padding: 20px;
+        }
+        canvas {
+            background: white;
+            box-shadow: 0 0 20px rgba(0,0,0,0.2);
+            cursor: crosshair;
+        }
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 20px; border-radius: 8px;
+            display: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>SIMS Analyzer V3.2</h2>
+    
+    <!-- 1. 加载 -->
+    <div class="control-group">
+        <h3>1. 数据加载</h3>
+        <input type="file" id="fileInput" accept=".csv,.txt">
+        <div id="fileStatus" style="font-size: 0.85em; color: #666; margin-top:5px;">等待文件...</div>
+    </div>
+
+    <!-- 2. 阈值 -->
+    <div class="control-group">
+        <h3>2. 强度阈值 (Intensity)</h3>
+        <div class="slider-container">
+            <label>Min: <span id="minValDisp" class="val-display">0</span></label>
+            <input type="range" id="minSlider" min="0" max="100" value="0">
+        </div>
+        <div class="slider-container">
+            <label>Max: <span id="maxValDisp" class="val-display">100</span></label>
+            <input type="range" id="maxSlider" min="0" max="100" value="100">
+        </div>
+        <label style="margin-top:10px">忽略值 (如 0,1):</label>
+        <input type="text" id="ignoredValues" placeholder="0" value="0">
+    </div>
+
+    <!-- 3. 扫描线 -->
+    <div class="control-group">
+        <h3>3. 扫描线工具</h3>
+        <!-- 新增坐标显示 -->
+        <div class="coord-display">
+            <div class="coord-row">
+                <span class="coord-label" style="color:red">P1 (Start):</span>
+                <span id="p1Coord">0, 0</span>
+            </div>
+            <div class="coord-row">
+                <span class="coord-label" style="color:red">P2 (End):</span>
+                <span id="p2Coord">0, 0</span>
+            </div>
+        </div>
+
+        <label>线条数量 (Count)</label>
+        <input type="number" id="lineCount" value="120" min="1">
+        <div style="height:8px"></div>
+        <label>线条间距 (Spacing)</label>
+        <input type="number" id="lineSpacing" value="4" min="1">
+        <div style="margin-top:10px; font-size:0.8em; color:#d32f2f; line-height:1.4;">
+            • 拖拽红点调整位置<br>
+            • <b>右键点击</b> 像素剔除噪点
+        </div>
+    </div>
+
+    <!-- 4. 导出 -->
+    <div class="control-group">
+        <h3>4. 结果导出</h3>
+        <button id="btnCalcSum">计算总强度 (Show Sum)</button>
+        <div id="sumResult" style="margin: 8px 0; font-size: 0.85em; color:#333; max-height: 60px; overflow-y:auto;"></div>
+        <button id="btnExport" class="secondary">导出 CSV (Save Profiles)</button>
+    </div>
+</div>
+
+<div id="main-wrapper">
+    <!-- 顶部元数据展示栏 -->
+    <div id="metadata-panel">
+        <div id="metadata-title" onclick="toggleMeta()">
+            <span>文件信息 / Metadata</span>
+            <span style="font-size:0.8em; color:#999">▼</span>
+        </div>
+        <div id="metadata-content">
+            <!-- 动态填充 -->
+        </div>
+    </div>
+
+    <!-- 画布容器 -->
+    <div id="canvas-container">
+        <div id="loading">正在解析数据...</div>
+        <canvas id="simsCanvas"></canvas>
+    </div>
+</div>
+
+<script>
+// --- 全局变量 ---
+const state = {
+    data: [], // {x, y, v, masked}
+    meta: [], // 存储 # 开头的头信息
+    width: 0, height: 0,
+    xMin: 0, xMax: 0,
+    yMin: 0, yMax: 0,
+    vMin: 0, vMax: 0,
+    scale: 1,
+    offsetX: 0, offsetY: 0,
+    p0: {x:0, y:0}, p1: {x:0, y:0},
+    dragging: null,
+    pixelMap: new Map() // "x,y" -> index
+};
+
+// --- UI 引用 ---
+const canvas = document.getElementById('simsCanvas');
+const ctx = canvas.getContext('2d', { alpha: false });
+const els = {
+    file: document.getElementById('fileInput'),
+    minSlider: document.getElementById('minSlider'),
+    maxSlider: document.getElementById('maxSlider'),
+    minDisp: document.getElementById('minValDisp'),
+    maxDisp: document.getElementById('maxValDisp'),
+    ignored: document.getElementById('ignoredValues'),
+    lineCount: document.getElementById('lineCount'),
+    lineSpacing: document.getElementById('lineSpacing'),
+    fileStatus: document.getElementById('fileStatus'),
+    loading: document.getElementById('loading'),
+    sumResult: document.getElementById('sumResult'),
+    metaPanel: document.getElementById('metadata-panel'),
+    metaContent: document.getElementById('metadata-content'),
+    btnExport: document.getElementById('btnExport'),
+    btnCalcSum: document.getElementById('btnCalcSum'),
+    p1Coord: document.getElementById('p1Coord'),
+    p2Coord: document.getElementById('p2Coord')
+};
+
+// --- 1. 文件解析逻辑 ---
+
+els.file.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    els.loading.style.display = 'block';
+    els.fileStatus.innerText = `加载: ${file.name}`;
+    
+    setTimeout(() => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                parseData(ev.target.result);
+                els.loading.style.display = 'none';
+            } catch (err) {
+                alert("解析出错: " + err.message);
+                els.loading.style.display = 'none';
+                console.error(err);
+            }
+        };
+        reader.readAsText(file);
+    }, 50);
+});
+
+function parseData(text) {
+    const lines = text.split(/\r\n|\n|\r/);
+    
+    const data = [];
+    const meta = [];
+    let vMin = Infinity, vMax = -Infinity;
+    let xMin = Infinity, xMax = -Infinity;
+    let yMin = Infinity, yMax = -Infinity;
+    
+    state.pixelMap.clear();
+
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].trim();
+        if (!line) continue;
+
+        // 1. 处理 Metadata
+        if (line.startsWith('#')) {
+            meta.push(line.substring(1).trim());
+            continue;
+        }
+
+        // 2. 处理数据行
+        let parts;
+        if (line.includes(',')) {
+            parts = line.split(',');
+        } else {
+            parts = line.split(/\s+/);
+        }
+        
+        if (parts.length < 3) continue;
+
+        let x = parseFloat(parts[0]);
+        let y = parseFloat(parts[1]);
+        let v = parseFloat(parts[2]);
+
+        if (isNaN(x) || isNaN(y) || isNaN(v)) continue;
+
+        if (x < xMin) xMin = x; if (x > xMax) xMax = x;
+        if (y < yMin) yMin = y; if (y > yMax) yMax = y;
+        if (v < vMin) vMin = v; if (v > vMax) vMax = v;
+
+        const point = {x, y, v, masked: false};
+        data.push(point);
+        
+        const key = `${Math.round(x)},${Math.round(y)}`;
+        state.pixelMap.set(key, data.length - 1);
+    }
+
+    if (data.length === 0) throw new Error("未找到有效数据点。请检查文件格式。");
+
+    state.data = data;
+    state.meta = meta;
+    state.xMin = xMin; state.xMax = xMax;
+    state.yMin = yMin; state.yMax = yMax;
+    state.vMin = vMin; state.vMax = vMax;
+    
+    renderMetadata(meta);
+    
+    if (vMin === vMax) vMax = vMin + 1; 
+
+    els.minSlider.min = vMin; els.minSlider.max = vMax; els.minSlider.value = vMin;
+    els.maxSlider.min = vMin; els.maxSlider.max = vMax; els.maxSlider.value = vMax;
+    
+    updateUI();
+
+    els.fileStatus.innerText = `点数: ${data.length} | Max Int: ${Math.round(vMax)}`;
+
+    const w = xMax - xMin;
+    const cy = (yMax + yMin) / 2;
+    state.p0 = { x: xMin + w * 0.15, y: cy };
+    state.p1 = { x: xMax - w * 0.15, y: cy };
+
+    updateCoordsDisplay();
+    fitCanvas();
+    draw();
+}
+
+function renderMetadata(metaLines) {
+    if (!metaLines || metaLines.length === 0) {
+        els.metaPanel.style.display = 'none';
+        return;
+    }
+    
+    els.metaPanel.style.display = 'block';
+    els.metaContent.innerHTML = '';
+    
+    metaLines.forEach(line => {
+        const div = document.createElement('div');
+        div.className = 'meta-item';
+        
+        const colonIdx = line.indexOf(':');
+        if (colonIdx > -1) {
+            const key = line.substring(0, colonIdx);
+            const val = line.substring(colonIdx + 1);
+            div.innerHTML = `<span class="meta-key">${key}:</span> <b>${val}</b>`;
+        } else {
+            div.innerText = line;
+        }
+        els.metaContent.appendChild(div);
+    });
+}
+
+function toggleMeta() {
+    const content = els.metaContent;
+    content.style.display = content.style.display === 'none' ? 'grid' : 'none';
+}
+
+
+// --- 2. 绘图逻辑 (Canvas) ---
+
+function getJetColor(val, min, max) {
+    let d = max - min;
+    if (d < 1e-9) d = 1; 
+    let x = (val - min) / d;
+    x = Math.max(0, Math.min(1, x));
+    
+    let fourValue = 4 * x;
+    let r = Math.min(fourValue - 1.5, -fourValue + 4.5);
+    let g = Math.min(fourValue - 0.5, -fourValue + 3.5);
+    let b = Math.min(fourValue + 0.5, -fourValue + 2.5);
+    
+    return `rgb(${Math.floor(Math.max(0,Math.min(1,r))*255)},
+                ${Math.floor(Math.max(0,Math.min(1,g))*255)},
+                ${Math.floor(Math.max(0,Math.min(1,b))*255)})`;
+}
+
+function fitCanvas() {
+    const container = document.getElementById('canvas-container');
+    const cw = container.clientWidth - 40;
+    const ch = container.clientHeight - 40;
+    
+    const dw = state.xMax - state.xMin + 2;
+    const dh = state.yMax - state.yMin + 2;
+    
+    const scaleW = cw / dw;
+    const scaleH = ch / dh;
+    state.scale = Math.min(scaleW, scaleH);
+    
+    if (state.scale <= 0) state.scale = 1;
+
+    canvas.width = dw * state.scale;
+    canvas.height = dh * state.scale;
+    
+    state.offsetX = -state.xMin + 1;
+    state.offsetY = -state.yMin + 1;
+}
+
+function toScreen(x, y) {
+    const sy_fixed = canvas.height - (y - state.yMin + 1) * state.scale;
+    return {x: (x - state.xMin + 1) * state.scale, y: sy_fixed};
+}
+
+function toData(sx, sy) {
+    const x = (sx / state.scale) + state.xMin - 1;
+    const y = state.yMin - 1 + (canvas.height - sy) / state.scale;
+    return {x, y};
+}
+
+function draw() {
+    if (state.data.length === 0) return;
+
+    ctx.fillStyle = "#222"; 
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const minV = parseFloat(els.minSlider.value);
+    const maxV = parseFloat(els.maxSlider.value);
+    const ignoredStr = els.ignored.value.split(/[, ]+/).filter(s=>s);
+    const ignoredSet = new Set(ignoredStr.map(Number));
+
+    const pointSize = Math.max(1, Math.ceil(state.scale * 1.02));
+
+    for (let p of state.data) {
+        if (p.masked) continue;
+        if (ignoredSet.has(p.v)) continue;
+        if (p.v < minV || p.v > maxV) continue;
+
+        const scr = toScreen(p.x, p.y);
+        ctx.fillStyle = getJetColor(p.v, state.vMin, state.vMax);
+        ctx.fillRect(
+            Math.floor(scr.x - pointSize/2), 
+            Math.floor(scr.y - pointSize/2), 
+            pointSize, pointSize
+        );
+    }
+
+    const s0 = toScreen(state.p0.x, state.p0.y);
+    const s1 = toScreen(state.p1.x, state.p1.y);
+
+    ctx.strokeStyle = 'red';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(s0.x, s0.y);
+    ctx.lineTo(s1.x, s1.y);
+    ctx.stroke();
+
+    drawHandle(s0.x, s0.y);
+    drawHandle(s1.x, s1.y);
+
+    drawParallelLines();
+}
+
+function drawHandle(x, y) {
+    ctx.fillStyle = 'rgba(255, 50, 50, 0.6)';
+    ctx.beginPath();
+    ctx.arc(x, y, 8, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+}
+
+function drawParallelLines() {
+    const count = parseInt(els.lineCount.value) || 1;
+    const spacing = parseFloat(els.lineSpacing.value) || 1;
+    
+    const dx = state.p1.x - state.p0.x;
+    const dy = state.p1.y - state.p0.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) return;
+
+    const ux = -dy / len;
+    const uy = dx / len;
+
+    ctx.strokeStyle = 'orange';
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+
+    const startIdx = -(count - 1) / 2;
+    
+    for (let i = 0; i < count; i++) {
+        const offset = (startIdx + i) * spacing;
+        const offX = ux * offset;
+        const offY = uy * offset;
+
+        const s = toScreen(state.p0.x + offX, state.p0.y + offY);
+        const e = toScreen(state.p1.x + offX, state.p1.y + offY);
+        
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(e.x, e.y);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1.0;
+}
+
+
+// --- 3. 交互事件 ---
+
+function updateUI() {
+    els.minDisp.innerText = els.minSlider.value;
+    els.maxDisp.innerText = els.maxSlider.value;
+    requestAnimationFrame(draw);
+}
+
+function updateCoordsDisplay() {
+    // 显示整数坐标
+    els.p1Coord.innerText = `${Math.round(state.p0.x)}, ${Math.round(state.p0.y)}`;
+    els.p2Coord.innerText = `${Math.round(state.p1.x)}, ${Math.round(state.p1.y)}`;
+}
+
+els.minSlider.addEventListener('input', updateUI);
+els.maxSlider.addEventListener('input', updateUI);
+els.ignored.addEventListener('input', updateUI);
+els.lineCount.addEventListener('input', updateUI);
+els.lineSpacing.addEventListener('input', updateUI);
+
+canvas.addEventListener('mousedown', e => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    
+    const s0 = toScreen(state.p0.x, state.p0.y);
+    const s1 = toScreen(state.p1.x, state.p1.y);
+
+    if (Math.hypot(mx - s0.x, my - s0.y) < 20) state.dragging = 'p0';
+    else if (Math.hypot(mx - s1.x, my - s1.y) < 20) state.dragging = 'p1';
+});
+
+canvas.addEventListener('mousemove', e => {
+    if (!state.dragging) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    
+    const p = toData(mx, my);
+    p.x = Math.round(p.x);
+    p.y = Math.round(p.y);
+
+    if (state.dragging === 'p0') state.p0 = p;
+    else state.p1 = p;
+    
+    updateCoordsDisplay();
+    requestAnimationFrame(draw);
+});
+
+canvas.addEventListener('mouseup', () => state.dragging = null);
+canvas.addEventListener('mouseleave', () => state.dragging = null);
+
+canvas.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    
+    const p = toData(mx, my);
+    const ix = Math.round(p.x);
+    const iy = Math.round(p.y);
+    
+    const key = `${ix},${iy}`;
+    const idx = state.pixelMap.get(key);
+    
+    if (idx !== undefined) {
+        state.data[idx].masked = !state.data[idx].masked;
+        draw();
+    }
+});
+
+window.addEventListener('resize', () => {
+    if (state.data.length > 0) {
+        fitCanvas();
+        draw();
+    }
+});
+
+
+// --- 4. 导出与计算 ---
+
+function getVal(x, y) {
+    const ix = Math.round(x);
+    const iy = Math.round(y);
+    const idx = state.pixelMap.get(`${ix},${iy}`);
+    if (idx === undefined) return 0;
+    
+    const pt = state.data[idx];
+    if (pt.masked) return 0;
+    
+    const minV = parseFloat(els.minSlider.value);
+    const maxV = parseFloat(els.maxSlider.value);
+    if (pt.v < minV || pt.v > maxV) return 0;
+    
+    const ignoredStr = els.ignored.value.split(/[, ]+/).filter(s=>s);
+    if (ignoredStr.includes(String(pt.v))) return 0; 
+
+    return pt.v;
+}
+
+function calcProfiles() {
+    const count = parseInt(els.lineCount.value) || 1;
+    const spacing = parseFloat(els.lineSpacing.value) || 1;
+    
+    const dx = state.p1.x - state.p0.x;
+    const dy = state.p1.y - state.p0.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) return [];
+
+    const ux = -dy / len; 
+    const uy = dx / len; 
+    
+    const profiles = [];
+    const startIdx = -(count - 1) / 2;
+    
+    const step = 0.5; 
+    const numSteps = Math.floor(len / step);
+
+    for (let i = 0; i < count; i++) {
+        const offset = (startIdx + i) * spacing;
+        const offX = ux * offset;
+        const offY = uy * offset;
+        
+        const lineStart = { x: state.p0.x + offX, y: state.p0.y + offY };
+        const lineValues = [];
+
+        for (let s = 0; s <= numSteps; s++) {
+            const t = s / numSteps;
+            const px = lineStart.x + t * dx;
+            const py = lineStart.y + t * dy;
+            lineValues.push(getVal(px, py));
+        }
+        profiles.push(lineValues);
+    }
+    return profiles;
+}
+
+els.btnExport.addEventListener('click', () => {
+    if (state.data.length === 0) return alert("请先加载数据");
+    const profiles = calcProfiles();
+    
+    let csv = "data:text/csv;charset=utf-8,";
+    profiles.forEach(row => {
+        csv += row.join(",") + "\r\n";
+    });
+
+    const link = document.createElement("a");
+    link.href = encodeURI(csv);
+    link.download = "sims_profiles.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+});
+
+els.btnCalcSum.addEventListener('click', () => {
+    if (state.data.length === 0) return;
+    const profiles = calcProfiles();
+    const sums = profiles.map(row => Math.round(row.reduce((a,b)=>a+b, 0)));
+    els.sumResult.innerText = "Sum: " + sums.join(", ");
+});
+
+</script>
+</body>
+</html>
