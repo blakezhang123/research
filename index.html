@@ -164,6 +164,7 @@ from scipy import special
 import os
 import math
 import datetime
+import asyncio
 from pyodide.ffi import create_proxy
 
 # ==========================================
@@ -1636,3 +1637,4 @@ if btn_fit:  btn_fit.addEventListener("click", create_proxy(run_fit))
 </py-script>
 </body>
 </html>
+
