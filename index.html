@@ -49,8 +49,8 @@
         .panel h4 { margin: 0 0 5px 0; border-bottom: 2px solid #ddd; padding-bottom: 3px; font-size: 1em; color: #2c3e50; }
 
         /* 图表区限制 */
-        #plot_area { flex: 1; background: white; border-radius: 8px; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 0; }
-        #plot_area img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        plot_area { flex: 1; background: white; border-radius: 8px; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 0; }
+        plot_area img { max-width: 100%; max-height: auto; object-fit: contain; }
         
         /* 日志区 */
         #log { height: 100px; background: #222; color: #0f0; padding: 8px; font-family: monospace; font-size: 0.85em; overflow-y: auto; border-radius: 6px; flex: 0 0 auto; }
@@ -148,7 +148,7 @@
 
 <py-config>
     packages = ["pandas", "numpy", "matplotlib", "scipy"]
-    [[fetch]]
+    terminal = false  [[fetch]]
     files = ["logo.png"]    
 </py-config>
 
@@ -1637,4 +1637,5 @@ if btn_fit:  btn_fit.addEventListener("click", create_proxy(run_fit))
 </py-script>
 </body>
 </html>
+
 
