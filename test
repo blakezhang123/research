@@ -1,0 +1,1725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DiffPy Web Version</title>
+    <link rel="stylesheet" href="https://pyscript.net/releases/2023.05.1/pyscript.css" />
+    <script defer src="https://pyscript.net/releases/2023.05.1/pyscript.js"></script>
+    <style>
+      :root {
+        --control-width: 320px;
+        --control-padding: 12px;
+        --control-gap: 8px;
+        --label-font-size: 0.85em;
+        --input-font-size: 0.92em;
+        --small-btn-padding: 8px 10px;
+        --bg: #f5f7fa;
+      }
+  
+      /* 页面整体 */
+      body {
+        font-family: 'Segoe UI', sans-serif;
+        padding: 16px;
+        max-width: 1600px;
+        margin: 0 auto;
+        background-color: var(--bg);
+      }
+  
+      .container {
+        display: flex;
+        gap: 16px;
+        height: 90vh;
+        align-items: flex-start;
+      }
+  
+      /* 左侧控制区（更窄、更紧凑） */
+      .controls {
+        flex: 0 0 var(--control-width); /* 宽度从 400 -> 320 */
+        padding: var(--control-padding);
+        background: #ffffff;
+        border-radius: 10px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.04);
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: var(--control-gap);
+        font-size: var(--input-font-size);
+        max-height: calc(90vh - 32px);
+      }
+  
+      .controls h3 { margin: 0; font-size: 1em; padding-bottom: 4px; }
+  
+      /* 右侧显示区 */
+      .output { flex: 1; display: flex; flex-direction: column; gap: 15px; overflow: hidden; }
+  
+      /* 图表区略微减小最小高度 */
+      #plot_area {
+        flex: 2;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        display: flex; justify-content: center; align-items: center;
+        overflow: hidden;
+        min-height: 360px;
+      }
+      #plot_area img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  
+      /* 日志区 */
+      #log {
+        flex: 1;
+        background: #2c3e50;
+        color: #2ecc71;
+        padding: 12px;
+        font-family: monospace;
+        border-radius: 12px;
+        overflow-y: auto;
+        font-size: 0.85em;
+      }
+  
+      /* 控件样式微调（更紧凑） */
+      #file_status { font-size: 0.78em; color: gray; margin-top: 3px; }
+      label {
+        margin-top: 6px;
+        font-weight: 600;
+        color: #34495e;
+        font-size: var(--label-font-size);
+        display: block;
+      }
+      input, select {
+        width: 100%;
+        padding: 6px;
+        margin-top: 4px;
+        border: 1px solid #e1e6e9;
+        border-radius: 6px;
+        box-sizing: border-box;
+        font-size: var(--input-font-size);
+      }
+      button {
+        margin-top: 10px;
+        padding: var(--small-btn-padding);
+        border-radius: 7px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        transition: 0.15s;
+        font-size: 0.95em;
+      }
+      button:hover { opacity: 0.95; transform: translateY(-1px); }
+  
+      /* 将 .row 改为两列 grid，更稳定且紧凑 */
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        align-items: center;
+      }
+  
+      /* 紧凑变体（可选） */
+      .controls.compact input, .controls.compact select { padding: 5px; }
+      .controls.compact label { font-size: 0.82em; }
+      .controls.compact button { padding: 7px 10px; font-size: 0.9em; }
+  
+      /* 小屏幕自适应 */
+      @media (max-width: 1000px) {
+        .container { flex-direction: column; height: auto; }
+        .controls { width: 100%; flex: 0 0 auto; max-height: 300px; }
+      }
+    </style>
+</head>
+<body>
+
+<h1>DiffPy Web Analysis</h1>
+
+<div class="container">
+    <div class="controls">
+        <h3>1. Data Import</h3>
+        <input type="file" id="file_upload" />
+        <button id="btn_load" style="background:#3498db; color:white;">Load File</button>
+        <div id="file_status" style="font-size: 0.8em; color: gray; margin-top:5px;">No file loaded</div>
+    
+        <hr style="border-top:1px solid #eee; width:100%;">
+        
+        <h3>2. Settings</h3>
+        <div class="row">
+            <div><label>Tracer:</label><input type="text" id="element_input" value="Ag"></div>
+            <div><label>Merge:</label><input type="text" id="merge_input" placeholder="e.g. 1, 2"></div>
+        </div>
+        
+        <label>X-Scale:</label>
+        <select id="xscale_input">
+            <option value="1">Linear (y)</option>
+            <option value="2">Square (y²)</option>
+            <option value="3">Power (y^1.2)</option>
+        </select>
+
+        <div class="row">
+            <div><label>Plot Limit (L):</label><input type="number" id="xlim_l_input" value="0"></div>
+            <div><label>Plot Limit (R):</label><input type="text" id="xlim_r_input" value="max"></div>
+        </div>
+    
+        <hr style="border-top:1px solid #eee; width:100%;">
+
+        <h3>3. Fitting</h3>
+        <label>Fit Function:</label>
+        <select id="fit_func_input">
+            <optgroup label="Standard">
+                <option value="Gauss">Gauss</option>
+                <option value="Linear">Linear</option>
+                <option value="P">Suzuoka (P)</option>
+                <option value="ERF">ERF</option>
+            </optgroup>
+            <optgroup label="Double/Triple">
+                <option value="Gaussx2">Gauss x2</option>
+                <option value="Gaussx3">Gauss x3</option>
+                <option value="ERFGauss">ERF + Gauss</option>
+            </optgroup>
+            <optgroup label="Complex (GB)">
+                <option value="GaussP">Gauss + P</option>
+                <option value="ERFP">ERF + P</option>
+                <option value="GaussLinP">Gauss + Linear + P</option>
+                <option value="ERFLinP">ERF + Linear + P</option>
+            </optgroup>
+            <optgroup label="Special">
+                <option value="Strohm">Strohm</option>
+            </optgroup>
+        </select>
+    
+        <div class="row">
+            <div><label>Fit Range (L):</label><input type="number" id="xfit_l_input" value="1"></div>
+            <div><label>Fit Range (R):</label><input type="text" id="xfit_r_input" value="max"></div>
+        </div>
+    
+        <label>Initial Params (C, D, ...):</label>
+        <input type="text" id="init_param_input" value="100, 2e-17">
+        
+        <label>Exclude Points (Indices):</label>
+        <input type="text" id="exclude_input" placeholder="e.g. 1, 5">
+
+        <div class="row">
+            <div><label>Fix Dv?</label>
+                <select id="fix_dv_input">
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                </select>
+            </div>
+            <div><label>x0 / sigma (Strohm)</label>
+                <input type="text" id="strohm_params" placeholder="0, 0" value="0, 0">
+            </div>
+        </div>
+    
+        <hr style="border-top:1px solid #eee; width:100%;">
+        
+        <button id="btn_plot" style="background:#2ecc71; color:white;">Update Plot</button>
+        <button id="btn_fit" style="background:#e74c3c; color:white;">Run Fit</button>
+    </div> <div class="output">
+        <div id="plot_area">
+            <div style="text-align:center; color:gray; padding-top:50px;">
+                Plot will appear here...
+            </div>
+        </div>
+        <div id="log">System Ready...</div>
+    </div>
+
+      
+        
+
+<py-config>
+    packages = ["pandas", "numpy", "matplotlib", "scipy"]
+    terminal = false 
+    [[fetch]]
+    files = ["logo.png"]    
+</py-config>
+
+<py-script>
+import js
+import pandas as pd
+import numpy as np
+import matplotlib  
+import matplotlib.ticker 
+import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
+from scipy import special
+import os
+import math
+import datetime
+from pyodide.ffi import create_proxy
+
+# ==========================================
+# 区域 A: 粘贴 Isotopes.py 的内容
+# ==========================================
+Element = {'Ag-110m' : 'Ag', 'Cd111m' : 'Cd', 'Co-57' : 'Co', 'Cr-51' : 'Cr', 'Cu-64' : 'Cu', 'Fe-55' : 'Fe', 'Fe-59' : 'Fe', 'Mn-54' : 'Mn', 'Na-22' : 'Na', 'Ni-63' : 'Ni', 'P-32' : 'P', 'Ti-44' : 'Ti', 'Zn-65' : 'Zn', 'Zr-89' : 'Zr'}
+Isotope = {'Ag-110m' : 'Ag-110m', 'Cd111m' : 'Cd111m', 'Co-57' : 'Co-57', 'Cr-51' : 'Cr-51', 'Cu-64' : 'Cu-64', 'Fe-55' : 'Fe-55', 'Fe-59' : 'Fe-59', 'Mn-54' : 'Mn-54', 'Na-22' : 'Na-22', 'Ni-63' : 'Ni-63', 'P-32' : 'P-32', 'Ti-44' : 'Ti-44', 'Zn-65' : 'Zn-65', 'Zr-89' : 'Zr-89'}
+Halflife = {'Ag-110m' : 21585312, 'Cd111m' : 2910, 'Co-57' : 23478336, 'Cr-51' : 2393625.6, 'Cu-64' : 45723.6, 'Fe-55' : 86594054.4, 'Fe-59' : 3843936, 'Mn-54' : 26974080, 'Na-22' : 82106563.68, 'Ni-63' : 3193629120, 'P-32' : 1232755.2, 'Ti-44' : 1865054160, 'Zn-65' : 21075552, 'Zr-89' : 282276}
+
+# ==========================================
+# 区域 B: 定义工具函数 (日志和文件处理)
+# ==========================================
+def log(message):
+    log_div = js.document.getElementById("log")
+    log_div.innerHTML += f"<br>{message}"
+    log_div.scrollTop = log_div.scrollHeight
+
+
+# 确保这个变量在所有函数外面定义了
+current_filename = "data.exdat"
+
+async def load_file_to_vfs(event):
+    global current_filename
+    print("--- 调试信息: 按钮被点击了 ---") # 这一行会显示在 F12 控制台里
+     
+    # 1. 获取页面元素
+    try:
+        file_input = js.document.getElementById("file_upload")
+        status_div = js.document.getElementById("file_status")
+        file_list = file_input.files
+        print(f"--- 调试信息: 找到文件输入框, 文件数: {file_list.length} ---")
+    except Exception as e:
+        print(f"--- 错误: 找不到页面元素 {e} ---")
+        return
+
+    # 2. 检查是否选择了文件
+    if file_list.length == 0:
+        print("--- 调试信息: 用户没有选择文件 ---")
+        status_div.innerText = "Error: Please select a file first."
+        status_div.style.color = "red"
+        return
+     
+    file = file_list.item(0)
+    print(f"--- 调试信息: 准备读取文件: {file.name} ---")
+    
+    # 3. 读取并加载文件
+    try:
+        # 这一步最容易卡住
+        content = await file.text()
+        print("--- 调试信息: 文件内容读取成功 ---")
+        
+        current_filename = file.name
+        
+        # 写入虚拟文件系统
+        with open(current_filename, "w") as f:
+            f.write(content)
+        print(f"--- 调试信息: 已写入虚拟文件系统: {current_filename} ---")
+        
+        msg = f"Success! Loaded: {current_filename}"
+        
+        # 更新界面
+        status_div.innerText = msg
+        status_div.style.color = "green"
+        print("--- 调试信息: 界面已更新 ---")
+        
+    except Exception as e:
+        print(f"--- 致命错误: {e} ---")
+        status_div.innerText = f"Error: {str(e)}"
+        status_div.style.color = "red"
+
+
+# ==========================================
+# 区域 C: 粘贴你的 ProfileCalc.py 中的 Calc 函数
+# 注意：要把 import 语句去掉，因为上面已经 import 过了
+# ==========================================
+
+def Calc(merge, filename_ext, export_filename):        
+    # Check if file exists.
+    os.path.exists(filename_ext)
+    if os.path.exists(filename_ext):
+        pass
+    else:
+        log("File doesn't exist!")
+        return
+
+    # Read input data from header in txt file
+    file = open(filename_ext, 'r')
+    exp_info = file.readlines()
+    # Check format of .exdat input file by header comments
+    if exp_info[0].replace('\n', '') != "# Sample name:"\
+            and exp_info[28].replace('\n', '') != "# Below, columns separated by tab should be stored (multiple Area columns for different tracers can be stored next to each other separated by tab):"\
+            and exp_info[29].replace('\n', '') != "# mass (mg)	time (s)	time_stamp (dd.mm.yyyy hh:mm)	Area (counts, cpm)":
+        log("The input file is not in the correct .exdat format!")
+        return
+        
+    tracer = exp_info[7].replace('\n', '')
+    for i in range(0, len(tracer.split(', ')), 1):
+        if tracer.split(', ')[i] not in Isotope.values():
+            log(tracer.split(', ')[i])
+            log("Error in input file: Isotope named incorrectly!")
+            return
+    sections = float(exp_info[9])
+    if sections < 0:
+        log(sections)
+        log("Error in input file: Number of sections cannot be negative!")
+        return
+    init_mass = float(exp_info[11])
+    end_mass = float(exp_info[13])
+    d = float(exp_info[15])
+    if d < 0:
+        log(d)
+        log("Error in input file: Diameter cannot be negative!")
+        return
+    rho = float(exp_info[17])
+    if rho < 0:
+        log(rho)
+        log("Error in input file: Density cannot be negative!")
+        return
+    background = exp_info[19].replace('\n', '')
+    if len(background.split(', ')) != len(tracer.split(', ')):
+        log(background)
+        log("Error in input file: Number of isotopes and number of backgrounds are not equal!")
+        return
+    for i in range(0, len(background.split(', ')), 1):
+        if float(background.split(', ')[i]) < 0:
+            log(background.split(', ')[i])
+            log("Error in input file: Background cannot be negative!")
+            return
+    Dv = exp_info[21].replace('\n', '')
+    if len(Dv.split(', ')) != len(tracer.split(', ')):
+        log(Dv)
+        log("Error in input file: Number of isotopes and number of Dv values are not equal!")
+        return
+    for i in range(0, len(Dv.split(', ')), 1):
+        if float(Dv.split(', ')[i]) < 0:
+            log(Dv.split(', ')[i])
+            log("Error in input file: Bulk diffusion coefficient cannot be negative!")
+            return
+    sputter = float(exp_info[23])
+    if sputter != 0 and sputter != 1:
+        log("Error in input file: Value for sputter must be 0 or 1!")
+        return
+    LSC = float(exp_info[25])
+    if LSC != 0 and LSC != 1:
+        log("Error in input file: Value for LSC must be 0 or 1!")
+        return
+    halflife = float(exp_info[27])
+    if halflife != 0 and halflife != 1:
+        log("Error in input file: Value for halflife must be 0 or 1!")
+        return
+    file.close()
+
+    # Define the columns of the txt file depending on the experiment
+    Col_labels_new = ["mass", "time", "time stamp"]
+    for i in range(0, len(tracer.split(', ')), 1):
+        Col_labels_new.insert(i + 3, tracer.split(', ')[i])
+
+    # Transform txt file into pandas
+    df = pd.read_csv(filename_ext, sep='\t', skiprows=30, header=None)
+    if len(df.columns) - 3 != len(tracer.split(', ')):
+        log("Error in input file: Number of isotopes and columns of peak area are not equal!")
+        return
+    df.columns = Col_labels_new
+
+    # Determine length of table
+    count = len(df)
+
+    # Determine section mass
+    if sputter == 1:
+        del df["mass"]
+        m = []
+        m_section = (init_mass - end_mass) / sections
+        for x in range(0, count, 1):
+            m.append(m_section)
+        df.insert(loc=0, column='mass', value=m)
+
+    # Half-life correction
+    if halflife == 1:
+        # Include half-life correction
+        # Calculate start time
+        datetimeFormat = '%d.%m.%Y %H:%M:%S'
+        # Check date format
+        for i in range(0, len(df), 1):
+            try:
+                datetime.datetime.strptime(str(df["time stamp"].iloc[i]), datetimeFormat)
+            except ValueError:
+                log(str(df["time stamp"].iloc[i]))
+                log("This is not the correct time_stamp format!")
+                return
+
+        time_stamp_1 = min(df["time stamp"])
+        start_time = datetime.datetime.strptime(time_stamp_1, datetimeFormat)
+
+        # Calculate waiting time
+        wait_time = []
+        for x in range(0, count, 1):
+            sect_total_time = datetime.datetime.strptime(df["time stamp"].iloc[x], datetimeFormat)\
+            - start_time
+            wait_time.append(sect_total_time.total_seconds())
+        df.insert(loc=3, column='wait time', value=wait_time)
+        del df["time stamp"]
+
+        # Correct Area
+        tau = []
+        for i in range(0, len(tracer.split(', ')), 1):
+            tau_isotope = math.log(2) / Halflife.get(tracer.split(', ')[i])
+            tau.append(tau_isotope)
+        for i in range(0, len(tracer.split(', ')), 1):
+            df["N1"] = df[Col_labels_new[i + 3]] * tau[i]
+            del df[Col_labels_new[i + 3]]
+            df["N2"] = np.exp(df["wait time"] * tau[i]) * df["time"]
+            df["Den"] = np.exp(df["wait time"] * tau[i] * (-1)) - np.exp(tau[i] * (df["time"] + df["wait time"]) * (-1))
+            df[Col_labels_new[i + 3]] = df["N1"] * df["N2"] / df["Den"]
+            del df["N1"]
+            del df["N2"]
+            del df["Den"]
+        del df["wait time"]
+    else:
+        del df["time stamp"]
+
+    # Determine Activity
+    if LSC == 1:
+        for i in range(0, len(tracer.split(', ')), 1):
+            # Background correction
+            df[tracer.split(', ')[i]] = df[tracer.split(', ')[i]] - float(background.split(', ')[i])
+            # Recalculate from cpm in cps
+            df[tracer.split(', ')[i]] = df[tracer.split(', ')[i]] / 60
+        del df["time"]
+    else:
+        for i in range(0, len(tracer.split(', ')), 1):
+            # Calculation of Activity
+            df[tracer.split(', ')[i]] = df[tracer.split(', ')[i]] / df["time"]
+            # Background correction
+            df[tracer.split(', ')[i]] = df[tracer.split(', ')[i]] - float(background.split(', ')[i])
+        del df["time"]
+
+    # Merging sections
+    if len(merge) > 1:
+        # Error checkup
+        if len(merge) > 5:
+            log(merge)
+            log("Error in DiffPy.py: Maximum 5 points can be merged!")
+            return
+        for i in range(0, len(merge) - 1, 1):
+            if merge[i + 1] - merge[i] != 1:
+                log(merge)
+                log("Error in DiffPy.py: You can only merge neighbored sections!")
+                return
+        # Calculate new x-value after merging
+        xmerge = 0
+        for j in range(0, len(merge), 1):
+            xmerge += df["mass"].iloc[merge[j] - 1]
+        # Calculate new y-value after merging
+        ymerge = []
+        for i in range(3, len(Col_labels_new), 1):
+            ymerge.append(0)
+            for j in range(0, len(merge), 1):
+                ymerge[i - 3] += df[Col_labels_new[i]].iloc[merge[j] - 1]
+        # Write merged values in list
+        merged_sections = []
+        merged_sections.append(xmerge)
+        for i in range(0, len(ymerge), 1):
+            merged_sections.append(ymerge[i])
+        # Create new dataframe (copy of existing dataframe)
+        df2 = df
+        # Clear entries in new dataframe
+        for i in range(0, len(df), 1):
+            df2 = df2.drop([i])
+        # Append sections before merging
+        for i in range(0, merge[0] - 1, 1):
+            df2 = df2.append(df.loc[i], ignore_index=True)
+        # Append merged sections as one section
+        df2.loc[len(df2)] = merged_sections
+        # Append sections after merging
+        for i in range(merge[len(merge) - 1], len(df), 1):
+            df2 = df2.append(df.loc[i], ignore_index=True)
+        df = df2
+        count = len(df)
+
+    # Determine relative specific Activity
+    for i in range(0, len(tracer.split(', ')), 1):
+        df[tracer.split(', ')[i]] = df[tracer.split(', ')[i]] / df["mass"]
+
+    # Check for negative values
+    for i in range(0, len(tracer.split(', ')), 1):
+        for j in range(0, len(df), 1):
+            value = df[tracer.split(', ')[i]].iloc[j]
+            if value <= 0:
+                df[tracer.split(', ')[i]] = df[tracer.split(', ')[i]].replace(value, '')
+
+    # Determine section thickness in meters
+    h = []
+    for x in range(0, count, 1):
+        h_section = 0.01 * (0.001 * df["mass"].iloc[x])/(rho * math.pi * ((d/20) ** 2))
+        h.append(h_section)
+    df.insert(loc=0, column='h', value=h)
+    del df["mass"]
+
+    # Determine penetration profile in meters
+    pp = []
+    profile_point1 = df["h"].iloc[0] / 2
+    pp.append(profile_point1)
+    for x in range(1, count, 1):
+        profile_point = pp[x-1] + (df["h"].iloc[x-1] / 2) + (df["h"].iloc[x] / 2)
+        pp.append(profile_point)
+    df.insert(loc=0, column='y', value=pp)
+    del df["h"]
+
+    # Writing results in new file
+    df.to_csv(export_filename, sep='\t', index=False, header=False)
+
+    log("The penetration profile is calculated and saved.")
+    # *** 在这里粘贴 ProfileCalc.py 中 def Calc(...): 下面的所有代码 ***
+    # *** 只需要粘贴 Calc 函数的内容 ***
+    log("Running Calculation...")
+    # (为了演示，我这里不粘贴全部，你需要自己粘贴)
+    # 原代码中的 log(...) 建议改成 log(...)，或者保留 log (会输出到浏览器控制台)
+    
+    
+
+# ==========================================
+# 区域 D: 粘贴你的 Plot.py 中的 Graph 函数
+
+# 关键修改：plt.show() 改为 display(plt, target="plot_area")
+# ==========================================
+
+def Graph(filename_ext, export_filename, Plot_data, xscale, xlim_l, xlim_r, software_name, software_version):
+    # Check if file exists.
+    os.path.exists(export_filename)
+    if os.path.exists(export_filename):
+        pass
+    else:
+        log("File doesn't exist!")
+        return
+
+    # Read input data from header in txt file
+    file = open(filename_ext, 'r')
+    exp_info = file.readlines()
+    sample = str(exp_info[1]).replace('\n', '')
+    T = float(exp_info[3])
+    t = float(exp_info[5])
+    tracer = exp_info[7].replace('\n', '')
+    for i in range(0, len(tracer.split(', ')), 1):
+        if tracer.split(', ')[i] not in Isotope.values():
+            log(tracer.split(', ')[i])
+            log("Error in input file: Isotope named incorrectly!")
+            return
+    file.close()
+
+    # Transform input file into pandas
+    Col_labels_new = []
+    Col_labels_new.insert(0, "y")
+    for i in range(0, len(tracer.split(', ')), 1):
+        Col_labels_new.insert(i+1, Element.get(tracer.split(', ')[i]))
+    df = pd.read_csv(export_filename, sep='\t', names=Col_labels_new)
+
+    # Error checkup
+    if len(Plot_data) > len(tracer.split(', ')):
+        log(Plot_data)
+        log("Error in DiffPy.py: Plot_data cannot contain more elements than given in the input file!")
+        return
+    if len(Plot_data) == 0:
+        log(Plot_data)
+        log("Error in DiffPy.py: Plot_data cannot be empty!")
+        return
+    for i in range(0, len(Plot_data), 1):
+        if Plot_data[i] not in Element.values():
+            log(Plot_data[i])
+            log("Error in DiffPy.py: Element in Plot_data named incorrectly!")
+            return
+    for i in range(0, len(Plot_data), 1):
+        if Plot_data[i] not in Col_labels_new:
+            log(Plot_data[i])
+            log("Error in DiffPy.py: Element in Plot_data does not exist in input file!")
+            return
+
+    # Write positions of empty sections into list for plotting
+    empty_section = {}
+    for j in range(0, len(Plot_data), 1):
+        empty_section[str(Plot_data[j])] = []
+        for i in range(0, len(df), 1):
+            value = df[Plot_data[j]].iloc[i]
+            isNaN = np.isnan(value)
+            if isNaN == True:
+                empty_section[str(Plot_data[j])].append(df["y"].iloc[i])
+
+    # Define plot markers
+    Markers = ["s", "o", "^", "v", "D", "p"]
+
+    # Define plot colors
+    Colors = ["b", "r", "g", "tab:orange",  "purple", "magenta"]
+
+    # Plotting preferences
+    # Define x-axis scaling (recalculation of x column in txt file)
+    if xscale == 2:
+        # Rescale x values
+        df[Col_labels_new[0]] = df[Col_labels_new[0]] ** 2
+        # Rescale empty sections
+        for j in range(0, len(Plot_data), 1):
+            for i in range(0, len(empty_section[Plot_data[j]]), 1):
+                empty_section[Plot_data[j]][i] = empty_section[Plot_data[j]][i] ** 2
+    elif xscale == 3:
+        # Rescale x values
+        df[Col_labels_new[0]] = df[Col_labels_new[0]] ** (1.2)
+        # Rescale empty sections
+        for j in range(0, len(Plot_data), 1):
+            for i in range(0, len(empty_section[Plot_data[j]]), 1):
+                empty_section[Plot_data[j]][i] = empty_section[Plot_data[j]][i] ** (1.2)
+    if xscale != 1 and xscale != 2 and xscale != 3:
+        log(xscale)
+        log("Error in DiffPy.py: xscale must be 1, 2 or 3!")
+        return
+
+    # Window size
+    fig = plt.figure(figsize=(10.00,8.00))
+    # Define font size of tick labels on the axes
+    plt.rc('xtick', labelsize=22)
+    plt.rc('ytick', labelsize=22)
+    ax = plt.gca()
+    # Setting the scientific expression of the x-axis
+    mf = matplotlib.ticker.ScalarFormatter(useMathText=True)
+    mf.set_powerlimits((-2,2))
+    plt.gca().xaxis.set_major_formatter(mf)
+    # Plot penetration profiles imported from file
+    for i in range(0, len(Plot_data), 1):
+        df.plot(kind='scatter', x=Col_labels_new[0], y=Plot_data[i], label=Plot_data[i], linewidth=2.0, ax=ax, color=Colors[i], marker=Markers[i]) #input
+    # x-axis preferences
+    xname = ['$\mathit{y}$', '$\mathit{y^2}$', '$\mathit{y^{1.2}}$'] # Label
+    xunit = ['m', 'm$^2$', 'm$^{1.2}$']
+    ax.set_xlabel(xname[xscale - 1] + " (" + xunit[xscale - 1] + ")", fontsize=24) # Set x-label
+    xmax = max(df["y"]) # right end of x-axis
+    if xlim_r == "max": # Set plot limits on x-axis
+        xlim_r = 1.05 * xmax
+    if xlim_r > 1.05 * xmax:
+        log(xlim_r)
+        log("Error in DiffPy.py: xlim_r cannot be larger than the maximum penetration depth!")
+        return
+    if xlim_l > xlim_r:
+        log(xlim_l)
+        log("Error in DiffPy.py: xlim_l cannot be larger than xlim_r!")
+        return
+    ax.set_xlim(xlim_l, 1.05 * xlim_r)
+    # y-axis preferences
+    yname = "rel. spec. Act." # Label
+    yunit = 'Bq mg$^{-1}$'
+    ax.set_ylabel(yname + " (" + yunit + ")", fontsize=24) # Set y-label
+    # Set log y-scale
+    ax.set_yscale('log')
+    # Legend preferences
+    plt.rc('legend', fontsize=20)  # Legend font size
+    plt.legend(loc="upper right")  # Legend position
+    # Tick preferences
+    ax.tick_params(which='major', direction='out', length=8, width=1)
+    ax.tick_params(which='minor', direction='out', length=5, width=1)
+    # Add top x-axis
+    if xscale == 1: ## Add top x-axis without labels
+        ax_t = ax.secondary_xaxis('top')
+        ax_t.set_xticklabels([])
+    elif xscale == 2: ## Add top x-axis with labels (bottom: x^2, top: x)
+        xold = np.arange(xlim_l, 1.05 * xlim_r, xmax/1000000)
+        xnew = xold ** 0.5
+        def forward(x):
+            return np.interp(x, xold, xnew)
+        def inverse(x):
+            return np.interp(x, xnew, xold)
+        ax_t = ax.secondary_xaxis('top', functions=(forward, inverse))
+        ax_t.set_xlim(0, )
+        ax_t.set_xlabel(xname[0] + " (m)", fontsize=24, labelpad=20)
+        ax_t.get_xaxis().set_major_formatter(mf)
+        xticks = ax_t.xaxis.get_major_ticks()
+        xticks[0].set_visible(False)
+    elif xscale == 3: ## Add top x-axis with labels (bottom: x^1.2, top: x)
+        xold = np.arange(xlim_l, 1.05 * xlim_r, xmax/1000000)
+        xnew = xold ** (5/6)
+        def forward(x):
+            return np.interp(x, xold, xnew)
+        def inverse(x):
+            return np.interp(x, xnew, xold)
+        ax_t = ax.secondary_xaxis('top', functions=(forward, inverse))
+        ax_t.set_xlim(0, )
+        ax_t.set_xlabel(xname[0] + " (m)", fontsize=24, labelpad=20)
+        ax_t.get_xaxis().set_major_formatter(mf)
+        xticks = ax_t.xaxis.get_major_ticks()
+        xticks[0].set_visible(False)
+    ax_t.tick_params(which='major', direction='in', length=8, width=1)
+    # Add right y-axis
+    ax_r = ax.secondary_yaxis('right') #mirror y scale
+    ax_r.tick_params(which='major', direction='in', length=8, width=1)
+    ax_r.tick_params(which='minor', direction='in', length=5, width=1)
+    ax_r.set_yticklabels([])
+    # Add text in the plot (see plot_text in DiffPy.py)
+    plot_text = sample + "\n" + "$\mathit{T}$ = " + str(T) + " K" + "\n" "$\mathit{t}$ = " + str(t) + " s"
+    ax.text(.6, .97, plot_text,
+            horizontalalignment='center',
+            verticalalignment='top',
+            transform=ax.transAxes,
+            fontsize=20)
+    # Plot lines on empty section positions
+    for j in range(0, len(Plot_data), 1):
+        for i in range(0, len(empty_section[Plot_data[j]]), 1):
+            plt.axvline(x=empty_section[Plot_data[j]][i], color=Colors[j], lw=0.5)
+    # Insert Software name and version in plot
+    software_info = software_name +  " - Version "  + software_version
+    ax.text(.01, .01, software_info,
+            horizontalalignment='left',
+            verticalalignment='bottom',
+            transform=ax.transAxes,
+            fontsize=10)
+    # Insert logo
+    #logo = plt.imread('logo.png')
+    #newax = fig.add_axes([0.01, 0.01, 0.1, 0.1], anchor='SW', zorder=-1)
+    #newax.imshow(logo)
+    #newax.axis('off')
+    # Plot
+    display(fig, target="plot_area")
+    # *** 在这里粘贴 Plot.py 中 Graph 函数的内容 ***
+    log("Plotting...")
+    
+
+
+ # ==========================================
+ # 区域 E: 粘贴你的 Fit.py 中的 Fitting 函数
+ # ==========================================
+ 
+def Fitting(filename_ext, export_filename, fitresults_filename, xfit_l, xfit_r, exclude, Fit_data, fit_func, xscale, xlim_l, xlim_r, init_param, fix_Dv, x0, sigma, software_name, software_version):
+    # *** 粘贴 Fitting 函数内容 ***
+
+    # Check if file exists.
+    os.path.exists(export_filename)
+    if os.path.exists(export_filename):
+        pass
+    else:
+        log("File doesn't exist!")
+        return
+
+    # Read input data from header in txt file
+    file = open(filename_ext, 'r')
+    exp_info = file.readlines()
+    sample = str(exp_info[1]).replace('\n', '')
+    T = float(exp_info[3])
+    t = float(exp_info[5])
+    tracer = exp_info[7].replace('\n', '')
+    for i in range(0, len(tracer.split(', ')), 1):
+        if tracer.split(', ')[i] not in Isotope.values():
+            log(tracer.split(', ')[i])
+            log("Error in input file: Isotope named incorrectly!")
+            return
+    file.close()
+
+    # Transform input file into pandas
+    Col_labels_new = []
+    Col_labels_new.insert(0, "y")
+    for i in range(0, len(tracer.split(', ')), 1):
+        Col_labels_new.insert(i + 1, Element.get(tracer.split(', ')[i]))
+    df = pd.read_csv(export_filename, sep='\t', names=Col_labels_new)
+    # Check for error in Fit_data
+    if Fit_data[0] not in Col_labels_new:
+        log(Fit_data[0])
+        log("Error in DiffPy.py: Element in Fit_data does not exist in input file!")
+        return
+
+    # Read Dv from input in txt file
+    file = open(filename_ext, 'r')
+    exp_info = file.readlines()
+    if Fit_data[0] not in Element.values():
+        log(Fit_data[0])
+        log("Error in DiffPy.py: Element in Fit_data named incorrectly!")
+        return
+    if len(Fit_data) != 1:
+        log(Fit_data)
+        log("Error in DiffPy.py: There can be only one element in Fit_data!")
+        return
+    Dv_pos = df.columns.get_loc(Fit_data[0]) - 1
+    Dv_list = exp_info[21].replace('\n', '')
+    Dv = float(Dv_list.split(', ')[Dv_pos])
+    file.close()
+
+    # Determine length of table
+    count = len(df)
+    # Determine maximum value of x-axis
+    xmax_orig = max(df["y"])
+
+    # Recalculation of x-limits for plotting and fitting
+    if xfit_r == "max":
+        xfit_r = count
+    elif xfit_r > count:
+        xfit_r = count
+    elif xfit_r < xfit_l:
+        log("Error in DiffPy.py: xfit_l cannot be larger than xfit_r!")
+        return
+
+    if xfit_l < 1:
+        log("Error in DiffPy.py: xfit_l cannot be smaller than 1!")
+        return
+
+    x_l_real = xfit_l - 1
+    x_r_real = xfit_r - 1
+
+    # Mirror imported table for fitting
+    df_trans = [df["y"], df[Fit_data[0]]]
+    df2_headers = ["y", Fit_data[0]]
+    df2 = pd.concat(df_trans, axis=1, keys=df2_headers)
+
+    # Write positions of empty sections into list for plotting
+    empty_section = []
+    for i in range(0, len(df2), 1):
+        value = df2[Fit_data[0]].iloc[i]
+        isNaN = np.isnan(value)
+        if isNaN == True:
+            empty_section.append(df2["y"].iloc[i])
+    
+    # Exclude data points which are outside of the limits
+    for i in range(0, x_l_real, 1):
+        df2 = df2.drop([i])
+    
+    for i in range(x_r_real + 1, count, 1):
+        df2 = df2.drop([i])
+        
+    # Delete rows with empty values
+    df2.dropna(subset=[Fit_data[0]], inplace=True)
+
+    # Exclude single data points which shouldn't be considered for fitting
+    for i in range(0, len(exclude), 1):
+        if exclude[i] > xfit_r:
+            log(exclude)
+            log("Error in DiffPy.py: One or all data points to exclude is out of the limits xfit_l and xfit_r!")
+            return
+        elif exclude[i] < xfit_l:
+            log(exclude)
+            log("Error in DiffPy.py: One or all data points to exclude is out of the limits xfit_l and xfit_r!")
+            return
+    if len(exclude) > len(df2):
+        log(exclude)
+        log("Error in DiffPy.py: There can't be more points excluded than available in the range set by xfit_l and xfit_r!")
+        return
+    elif len(exclude) == len(df2):
+        log(exclude)
+        log("Error in DiffPy.py: No points for fitting available! Check exclude!")
+        return
+    if len(exclude) > 0:
+        for i in range(0, len(exclude), 1):
+            df2 = df2.drop(exclude[i] - 1)
+
+    # Convert table to array
+    data = df2[["y", Fit_data[0]]].to_numpy()
+    # Log of the y-scale
+    data[:,1] = np.log(data[:,1])
+
+    # Definition of fit functions
+
+    def linear(x):
+        return np.polyfit(x, data[:,1], int(1), cov=True)
+
+    def Linear(x): # Linear fit
+        return C * np.exp(-x * m)
+
+    def Gauss(x): # Gauss fit
+        return C * np.exp(-x ** 2 / (4 * D * t))
+
+    def ERF(x, C, D):  # Error function fit
+        return np.log(C * special.erfc(x / np.sqrt(4 * D * t)))
+
+    def TripleProduct(x):  # Triple product P (Type B kinetics grain-boundary diffusion)
+        return C * np.exp(-x ** (1.2) * ((P0 * (Dv ** Dv_exp / t ** t_exp) ** Dvt_exp / P) ** (1/slope_exp)))
+
+    def Gaussx2(x, C1, D1, C2, D2):  # Double Gauss fit
+        return np.log(C1 * np.exp(-x ** 2 / (4 * D1 * t)) + C2 * np.exp(-x ** 2 / (4 * D2 * t)))
+
+    def Gaussx3(x, C1, D1, C2, D2, C3, D3):  # Triple Gauss fit
+        return np.log(C1 * np.exp(-x ** 2 / (4 * D1 * t)) + C2 * np.exp(-x ** 2 / (4 * D2 * t)) + C3 * np.exp(-x ** 2 / (4 * D3 * t)))
+
+    def ERFGauss(x, C1, D1, C2, D2):  # Error function + Gauss fit
+        return np.log(C1 * special.erfc(x / np.sqrt(4 * D1 * t)) + C2 * np.exp(-x ** 2 / (4 * D2 * t)))
+
+    def GaussP(x, C1, D, C2, P):  # Gauss + triple product fit
+        if fix_Dv == "yes":
+            return np.log(C1 * np.exp(-x ** 2 / (4 * D * t)) + C2 * np.exp(-x ** (1.2) * (P0 * (Dv ** Dv_exp / t ** t_exp) ** Dvt_exp / P) ** (1/slope_exp)))
+        elif fix_Dv == "no":
+            return np.log(C1 * np.exp(-x ** 2 / (4 * D * t)) + C2 * np.exp(-x ** (1.2) * (P0 * (D ** Dv_exp / t ** t_exp) ** Dvt_exp / P) ** (1 / slope_exp)))
+
+    def GaussLin(x, C1, D, C2, m):  # Gauss + linear fit
+        return np.log(C1 * np.exp(-x ** 2 / (4 * D * t)) + C2 * np.exp(-x * m))
+
+    def ERFLin(x, C1, D, C2, m):  # Error function + linear fit
+        return np.log(C1 * special.erfc(x / np.sqrt(4 * D * t)) + C2 * np.exp(-x * m))
+
+    def ERFP(x, C1, D, C2, P):  # ERF + triple product fit
+        if fix_Dv == "yes":
+            return np.log(C1 * special.erfc(x / np.sqrt(4 * D * t)) + C2 * np.exp(-x ** (1.2) * (P0 * (Dv ** Dv_exp / t ** t_exp) ** Dvt_exp / P) ** (1/slope_exp)))
+        elif fix_Dv == "no":
+            return np.log(C1 * special.erfc(x / np.sqrt(4 * D * t)) + C2 * np.exp(-x ** (1.2) * (P0 * (D ** Dv_exp / t ** t_exp) ** Dvt_exp / P) ** (1 / slope_exp)))
+
+    def GaussLinP(x, C1, D, C2, P, C3, m): # Gauss + Linear + triple product fit
+        if fix_Dv == "yes":
+            return np.log(C1 * np.exp(-x ** 2 / (4 * D * t)) + C3 * np.exp(-x * m) + C2 * np.exp(-x ** (1.2) * (P0 * (Dv ** Dv_exp / t ** t_exp) ** Dvt_exp / P) ** (1/slope_exp)))
+        elif fix_Dv == "no":
+            return np.log(C1 * np.exp(-x ** 2 / (4 * D * t)) + C3 * np.exp(-x * m) + C2 * np.exp(-x ** (1.2) * (P0 * (D ** Dv_exp / t ** t_exp) ** Dvt_exp / P) ** (1 / slope_exp)))
+
+    def ERFLinP(x, C1, D, C2, P, C3, m): # Error function + Linear + triple product fit
+        if fix_Dv == "yes":
+            return np.log(C1 * special.erfc(x / np.sqrt(4 * D * t)) + C3 * np.exp(-x * m) + C2 * np.exp(-x ** (1.2) * (P0 * (Dv ** Dv_exp / t ** t_exp) ** Dvt_exp / P) ** (1/slope_exp)))
+        elif fix_Dv == "no":
+            return np.log(C1 * special.erfc(x / np.sqrt(4 * D * t)) + C3 * np.exp(-x * m) + C2 * np.exp(-x ** (1.2) * (P0 * (D ** Dv_exp / t ** t_exp) ** Dvt_exp / P) ** (1 / slope_exp)))
+
+    def Strohm(x, M, D, k): # Strohm solution for implanted sources
+        vor = (M / 2) / np.sqrt(1 + (2 * D * t / sigma ** 2))
+        kl1 = (-(x0 / (2 * sigma ** 2)) - x / (4 * D)) / np.sqrt(1 / (2 * sigma ** 2) + 1 / (4 * D))
+        kl2 = -(x - x0) ** 2 / (2 * sigma ** 2 + 4 * D * t)
+        kl3 = (-(x0 / (2 * sigma ** 2)) + x / (4 * D)) / np.sqrt(1 / (2 * sigma ** 2) + 1 / (4 * D))
+        kl4 = -(x + x0) ** 2 / (2 * sigma ** 2 + 4 * D * t)
+        return vor * (special.erfc(kl1) * np.exp(kl2) + k * special.erfc(kl3) * np.exp(kl4))
+
+    # Define list of fits with recalculation of x-axis in order to use linear fit
+    standard_fits = ["Linear", "Gauss", "P"]
+    # Define list of direct fits without recalculation of x-axis in order to use linear fit
+    special_fits = ["ERF", "Gaussx2", "Gaussx3", "ERFGauss", "GaussP", "GaussLin", "ERFLin", "ERFP", "GaussLinP", "ERFLinP", "Strohm"]
+    # Define list of multiple fits with GB analysis
+    multi_fits_GB = ["GaussP", "ERFP", "GaussLinP", "ERFLinP"]
+
+    if fit_func in standard_fits:
+        pass
+    elif fit_func in special_fits:
+        pass
+    else:
+        log(fit_func)
+        log("Error in DiffPy.py: The called fitting function in fit_func doesn't exist!")
+        return
+
+    # Call fit function
+    # Recalculation using Gauss fit
+    if fit_func == "Gauss":
+        # Recalculate x-axis
+        data[:, 0] = data[:, 0] ** 2
+        # Linear fit
+        popt, pcov =  linear(data[:, 0])
+        # Recalculation of fit parameters
+        C = np.exp(popt[1])
+        dC_up = np.exp(popt[1] + (pcov[1,1] ** 0.5)) - C
+        dC_low = C - np.exp(popt[1] - (pcov[1,1] ** 0.5))
+        D = -1 / (4 * popt[0] * t)
+        dD = (pcov[0,0] ** 0.5) / (4 * t * popt[0] ** 2)
+        # Define fit function as string for txt file
+        func = "y = C*exp(-x^2/(4*D*t))"
+        # Call Gauss function for plot
+        plot_fit = Gauss
+        # Fit results for output txt file
+        fit_params = "C = " + str(C) + " + " + str(dC_up) + "; - " + str(dC_low) + " Bq mg^-1 " + "\n" \
+                    + "D = " + str(D) + " +/- " + str(dD) + " m^2s^-1 " + "\n" \
+                    + "Original fit slopes:" + "\n" \
+                    + "m = " + str(-popt[0]) + " +/- " + str(pcov[0,0] ** 0.5)
+        # Fit results for textbox in plot
+        fit_results_plot = "C = " + "{:.2f}".format(C) + " Bq mg$^{-1}$ " + "\n" \
+                           + "D = " + "{:.2e}".format(D) + " m$^2$s$^{-1}$ " + "$\pm$ " + "{:.2f}".format(100 * dD/D) + "%"
+
+    # Recalculation using linear fit
+    if fit_func == "Linear":
+        # Linear fit
+        popt, pcov = linear(data[:, 0])
+        # Recalculation of fit parameters
+        C = np.exp(popt[1])
+        dC_up = np.exp(popt[1] + (pcov[1, 1] ** 0.5)) - C
+        dC_low = C - np.exp(popt[1] - (pcov[1, 1] ** 0.5))
+        m = -popt[0]
+        dm = pcov[0, 0] ** 0.5
+        # Define fit function as string for txt file
+        func = "y = C*exp(-x*m)"
+        # Call Gauss function for plot
+        plot_fit = Linear
+        # Fit results for output txt file
+        fit_params = "C = " + str(C) + " + " + str(dC_up) + "; - " + str(dC_low) + "\n" \
+                    + "m = " + str(m) + " +/- " + str(dm)
+        # Fit results for textbox in plot
+        fit_results_plot = "C = " + "{:.2f}".format(C) + "\n" \
+                        + "m = " + "{:.2e}".format(m) + " $\pm$ " + "{:.2f}".format(100 * dm / m) + "%"
+
+    # Recalculation using triple product P
+    if fit_func == "P":
+        # Recalculate x-axis
+        data[:, 0] = data[:, 0] ** (1.2)
+        # Linear fit
+        popt, pcov = linear(data[:, 0])
+        # Recalculation of fit parameters
+        C = np.exp(popt[1])
+        dC_up = np.exp(popt[1] + (pcov[1,1] ** 0.5)) - C
+        dC_low = C - np.exp(popt[1] - (pcov[1,1] ** 0.5))
+        P0 = 1.33
+        Dv_exp = 1
+        t_exp = 1
+        Dvt_exp = 0.5
+        slope_exp = 5/3
+        P = P0 * ((Dv ** Dv_exp / t ** t_exp) ** (Dvt_exp)) / ((- popt[0]) ** (slope_exp))
+        dP = slope_exp * P0 * ((Dv ** Dv_exp) / (t ** t_exp)) ** Dvt_exp * (pcov[0,0] ** 0.5) / ((-popt[0]) ** (slope_exp + 1))
+        # Calculation of grain-boundary diffusion paramters
+        delta = 5E-10
+        alpha = delta / (2 * np.sqrt(Dv * t))
+        beta = P / (2 * Dv * np.sqrt(Dv * t))
+        # Define fit function as string for txt file
+        func = "Suzuoka" + "\n"\
+            + "y = C*exp(-x^(1.2) * (1.33*sqrt(Dv/t)/P)^(3/5))"
+        # Evaluation of beta parameter including recalculation of P and beta
+        beta_check = False
+        #if beta < 18:
+        #    log("Beta is lower than 18!")
+        #    log("Do you want to calculate the triple product using the exact solution? (This may take several minutes!)")
+        #    exact_solution = input("If yes, press y; If no, press n: ")
+        #    exact_solution
+        #    if exact_solution == "y":
+        #        log("Starting calculation. Please wait!")
+        #        Exact_Solution(df2, t, Dv, C, P, alpha)
+        #        beta_check = True
+        #        return
+        #    elif exact_solution == "n":
+        #        beta_check = False
+        while beta_check == False:
+            if beta < 1E2:
+                P0 = 1.084
+                Dv_exp = 0.91
+                t_exp = 1.03
+                Dvt_exp = 1 / 1.94
+                slope_exp = 5 / 2.91
+                P = P0 * ((Dv ** Dv_exp / t ** t_exp) ** (Dvt_exp)) / ((- popt[0]) ** (slope_exp))
+                dP = slope_exp * P0 * ((Dv ** Dv_exp) / (t ** t_exp)) ** Dvt_exp * (pcov[0, 0] ** 0.5) / ((-popt[0]) ** (slope_exp + 1))
+                beta = P / (2 * Dv * np.sqrt(Dv * t))
+                func = "Suzuoka" + "\n"\
+                    + "y = C*exp(-x^(1.2) * (1.084*(Dv^0.91/t^1.03)^(1/1.94)/P)^(2.91/5))"
+                beta_check = bool(beta < 1E2)
+            elif 1E2 < beta < 1E4:
+                P0 = 1.206
+                Dv_exp = 0.585
+                t_exp = 0.605
+                Dvt_exp = 1 / 1.19
+                slope_exp = 5 / 2.975
+                P = P0 * ((Dv ** Dv_exp / t ** t_exp) ** (Dvt_exp)) / ((- popt[0]) ** (slope_exp))
+                dP = slope_exp * P0 * ((Dv ** Dv_exp) / (t ** t_exp)) ** Dvt_exp * (pcov[0, 0] ** 0.5) / ((-popt[0]) ** (slope_exp + 1))
+                beta = P / (2 * Dv * np.sqrt(Dv * t))
+                func = "Suzuoka" + "\n"\
+                    + "y = C*exp(-x^(1.2) * (1.206*(Dv^0.585/t^0.605)^(1/1.19)/P)^(2.975/5))"
+                beta_check = bool(1E2 < beta < 1E4)
+            elif beta > 1E4:
+                P0 = 1.308
+                Dv_exp = 1
+                t_exp = 1
+                Dvt_exp = 1 / 2
+                slope_exp = 5 / 3
+                P = P0 * ((Dv ** Dv_exp / t ** t_exp) ** (Dvt_exp)) / ((- popt[0]) ** (slope_exp))
+                dP = slope_exp * P0 * ((Dv ** Dv_exp) / (t ** t_exp)) ** Dvt_exp * (pcov[0, 0] ** 0.5) / ((-popt[0]) ** (slope_exp + 1))
+                beta = P / (2 * Dv * np.sqrt(Dv * t))
+                func = "Suzuoka" + "\n"\
+                    + "y = C*exp(-x^(1.2) * (1.308*sqrt(Dv/t)/P)^(3/5))"
+                beta_check = bool(beta > 1E4)
+
+        # Call P function for plot
+        plot_fit = TripleProduct
+        # Fit results for output txt file
+        fit_params = "C = " + str(C) + " + " + str(dC_up) + "; - "+ str(dC_low) + " Bq mg^{-1} " + "\n" \
+                     + "P = " + str(P) + " +/- " + str(dP) + " m^3s^-1 " + "\n" \
+                     + "alpha/s = " + str(alpha) + "\n" \
+                     + "beta = " + str(beta) + "\n" \
+                     + "Original fit slopes:" + "\n" \
+                     + "m = " + str(-popt[0]) + " +/- " + str(pcov[0,0] ** 0.5)
+        # Fit results for textbox in plot
+        fit_results_plot = "C = " + "{:.2f}".format(C) + " Bq mg$^{-1}$ " + "\n" \
+                           + "P = " + "{:.2e}".format(P) + " m$^3$s$^{-1}$ " + "$\pm$ " + "{:.2f}".format(100 * dP/P) + "%" + "\n" \
+                           + r'$\alpha$' + "/s = " + "{:.2e}".format(alpha) + "\n" \
+                           + r'$\beta$'+ " = " + "{:.2f}".format(beta)
+
+    # Check if called fit function in list special_fits
+    if fit_func == "ERF":
+        # Call ERF function for fit and plot
+        plot_fit = ERF
+        # Define fit function as string for txt file
+        func = "y = C*erfc(x/sqrt(4*D*t))"
+
+    if fit_func == "Gaussx2":
+        # Call double Gauss function for fit and plot
+        plot_fit = Gaussx2
+        # Define fit function as string for txt file
+        func = "y = C1*exp(-x^2/(4*D1*t)) + C2*exp(-x^2/(4*D2*t))"
+
+    if fit_func == "Gaussx3":
+        # Call double Gauss function for fit and plot
+        plot_fit = Gaussx3
+        # Define fit function as string for txt file
+        func = "y = C1*exp(-x^2/(4*D1*t)) + C2*exp(-x^2/(4*D2*t)) + C3*exp(-x^2/(4*D3*t))"
+
+    if fit_func == "ERFGauss":
+        # Call ERF + Gauss function for fit and plot
+        plot_fit = ERFGauss
+        # Define fit function as string for txt file
+        func = "y = C1*erfc(x/sqrt(4*D*t)) + C2*exp(-x^2/(4*D2*t))"
+
+    if fit_func == "GaussP":
+        # Set initial fitting parameters for triple product part
+        P0 = 1.33
+        Dv_exp = 1
+        t_exp = 1
+        Dvt_exp = 0.5
+        slope_exp = 5 / 3
+        # Call Gauss + triple product function for fit and plot
+        plot_fit = GaussP
+        func1 = "Suzuoka" + "\n"\
+            + "y = C1*exp(-x^2/(4*D*t)) + "
+
+    if fit_func == "ERFP":
+        # Set initial fitting parameters for triple product part
+        P0 = 1.33
+        Dv_exp = 1
+        t_exp = 1
+        Dvt_exp = 0.5
+        slope_exp = 5 / 3
+        # Call ERF + triple product function for fit and plot
+        plot_fit = ERFP
+        func1 = "Suzuoka" + "\n"\
+            + "y = C1*erfc(x/sqrt(4*D*t)) + "
+
+    if fit_func == "GaussLin":
+        # Call Gauss + linear function for fit and plot
+        plot_fit = GaussLin
+        # Define fit function as string for txt file
+        func = "y = C1*exp(-x^2/(4*D2*t)) + C2*exp(-x*m)"
+
+    if fit_func == "ERFLin":
+        # Call Error function + linear function for fit and plot
+        plot_fit = ERFLin
+        # Define fit function as string for txt file
+        func = "y = C1*erfc(x/sqrt(4*D*t)) + C2*exp(-x*m)"
+
+    if fit_func == "GaussLinP":
+        # Set initial fitting parameters for triple product part
+        P0 = 1.33
+        Dv_exp = 1
+        t_exp = 1
+        Dvt_exp = 0.5
+        slope_exp = 5 / 3
+        # Call Gauss + triple product function for fit and plot
+        plot_fit = GaussLinP
+        func1 = "Suzuoka" + "\n"\
+            + "y = C1*exp(-x^2/(4*D*t)) + C2*exp(-x*sqrt(g*sqrt(D/t)/P)"
+
+    if fit_func == "ERFLinP":
+        # Set initial fitting parameters for triple product part
+        P0 = 1.33
+        Dv_exp = 1
+        t_exp = 1
+        Dvt_exp = 0.5
+        slope_exp = 5 / 3
+        # Call Gauss + triple product function for fit and plot
+        plot_fit = ERFLinP
+        func1 = "Suzuoka" + "\n"\
+            + "y = C1*erfc(x/sqrt(4*D*t)) + C2*exp(-x*sqrt(g*sqrt(D/t)/P))"
+
+    if fit_func == "Strohm":
+        # Call ERF function for fit and plot
+        plot_fit = Strohm
+        # Define fit function as string for txt file
+        func = "y = M/(2*sqrt(1+(2*D*t/sigma^2))) * [erfc((-x0/2sigma^2 - y/4D)/sqrt(1/2sigma^2 + 1/4D)) * exp(-(x-x0)^2/(2sigma^2 + 4Dt)) + k * erfc((-x0/2sigma^2 + y/4D)/sqrt(1/2sigma^2 + 1/4D)) * exp(-(x+x0)^2/(2sigma^2 + 4Dt))]"
+
+    # Define fitting parameters of the called fit function
+    if fit_func in special_fits:
+        a_signature = inspect.signature(plot_fit)
+        parameters = a_signature.parameters
+        parameter_list = list(parameters)
+        if len(parameter_list) - 1 != len(init_param):
+            log(init_param)
+            log("Error in DiffPy.py: Missing or too much initial parameters in init_param!")
+            return
+
+        # Fit
+        if fit_func == "Strohm":
+            init_param_low = []
+            init_param_up = []
+            for i in range(0, len(init_param) - 1, 1):
+                init_param_low.insert(i, init_param[i] * 0.5)
+            init_param_low.insert(len(init_param), -1)
+            for i in range(0, len(init_param) - 1, 1):
+                init_param_up.insert(i, init_param[i] * 2)
+            init_param_up.insert(len(init_param), 1)
+            popt, pcov = curve_fit(plot_fit, data[:,0], data[:,1], bounds=(init_param_low, init_param_up),  maxfev=999999999999999)
+        else:
+            popt, pcov = curve_fit(plot_fit, data[:,0], data[:,1], init_param, maxfev=10000)
+
+        # Check if fit results reach boundaries
+        for i in range(0, len(init_param), 1):
+            if popt[i]/init_param[i] < 0.25:
+                log("Initial parameter is too high!", parameter_list[i + 1])
+                log("Initial parameter: ", init_param[i], "Fit result: ", popt[i], "Factor: ", 1/(popt[i]/init_param[i]))
+            elif popt[i]/init_param[i] > 4:
+                log("Initial parameter is too low!", parameter_list[i + 1])
+                log("Initial parameter: ", init_param[i], "Fit result: ", popt[i], "Factor: ", popt[i]/init_param[i])
+
+        if fit_func in multi_fits_GB:
+            delta = 5E-10
+            if fix_Dv == "yes":
+                D1 = Dv
+            elif fix_Dv == "no":
+                D1 = popt[1]
+            beta = popt[3] / (2 * D1 * np.sqrt(D1 * t))
+            beta_check = False
+            while beta_check == False:
+                if beta < 1E2:
+                    P0 = 1.084
+                    Dv_exp = 0.91
+                    t_exp = 1.03
+                    Dvt_exp = 1 / 1.94
+                    slope_exp = 5 / 2.91
+                    popt, pcov = curve_fit(plot_fit, data[:, 0], data[:, 1], init_param)
+                    beta = popt[3] / (2 * D1 * np.sqrt(D1 * t))
+                    m2 = (P0 * (D1 ** Dv_exp / t ** t_exp) ** Dvt_exp / popt[3]) ** (1 / slope_exp)
+                    dm2 = m2 * pcov[3,3] ** 0.5 / popt[3]
+                    func2 = "C2*exp(-x^(1.2) * (1.084*(Dv^0.91/t^1.03)^(1/1.94)/P)^(2.91/5))"
+                    beta_check = bool(beta < 1E2)
+                elif 1E2 < beta < 1E4:
+                    P0 = 1.206
+                    Dv_exp = 0.585
+                    t_exp = 0.605
+                    Dvt_exp = 1 / 1.19
+                    slope_exp = 5 / 2.975
+                    popt, pcov = curve_fit(plot_fit, data[:, 0], data[:, 1], init_param)
+                    beta = popt[3] / (2 * D1 * np.sqrt(D1 * t))
+                    m2 = (P0 * (D1 ** Dv_exp / t ** t_exp) ** Dvt_exp / popt[3]) ** (1 / slope_exp)
+                    dm2 = m2 * pcov[3, 3] ** 0.5 / popt[3]
+                    func2 = "C2*exp(-x^(1.2) * (1.206*(Dv^0.585/t^0.605)^(1/1.19)/P)^(2.975/5))"
+                    beta_check = bool(1E2 < beta < 1E4)
+                elif beta > 1E4:
+                    P0 = 1.308
+                    Dv_exp = 1
+                    t_exp = 1
+                    Dvt_exp = 1 / 2
+                    slope_exp = 5 / 3
+                    popt, pcov = curve_fit(plot_fit, data[:, 0], data[:, 1], init_param)
+                    beta = popt[3] / (2 * D1 * np.sqrt(D1 * t))
+                    m2 = (P0 * (D1 ** Dv_exp / t ** t_exp) ** Dvt_exp / popt[3]) ** (1 / slope_exp)
+                    dm2 = m2 * pcov[3, 3] ** 0.5 / popt[3]
+                    func2 = "C2*exp(-x^(1.2) * (1.308*sqrt(Dv/t)/P)^(3/5))"
+                    beta_check = bool(beta > 1E4)
+            alpha = delta / (2 * np.sqrt(popt[1] * t))
+            func = func1 + func2
+
+        # Define fit parameter results for txt file
+        fit_params = str()
+        for i in range(0, len(popt), 1):
+            if popt[i] < 0.01:
+                fit_params_single = parameter_list[i + 1]+ " = " + "{:.2e}".format(popt[i]) + " +/- " + "{:.2f}".format(100 * (pcov[i, i] ** 0.5) / popt[i]) + "%" + "\n"
+            else:
+                fit_params_single = parameter_list[i + 1] + " = " + "{:.2f}".format(popt[i]) + " +/- " + "{:.2f}".format(100 * (pcov[i, i] ** 0.5) / popt[i]) + "%"  + "\n"
+            fit_params += fit_params_single
+        if fit_func == "ERF":
+            m = []
+            dm = []
+            m.append(1 / np.sqrt(4 * popt[1] * t))
+            dm.append((pcov[1,1] ** 0.5) / (np.sqrt(4 * t) * (popt[1] ** 1.5)))
+        if fit_func == "Gaussx2":
+            m = []
+            dm = []
+            for i in range(1, len(popt), 2):
+                m.append(1 / (4 * popt[i] * t))
+                dm.append((pcov[i,i] ** 0.5) / (4 * t * (popt[i] ** 2)))
+        if fit_func == "Gaussx3":
+            m = []
+            dm = []
+            for i in range(1, len(popt), 2):
+                m.append(1 / (4 * popt[i] * t))
+                dm.append((pcov[i,i] ** 0.5) / (4 * t * (popt[i] ** 2)))
+        if fit_func == "ERFGauss":
+            m = []
+            dm = []
+            m1 = 1 / np.sqrt(4 * popt[1] * t)
+            dm1 = (pcov[1,1] ** 0.5) / (np.sqrt(4 * t) * (popt[1] ** 1.5))
+            m.append(m1)
+            dm.append(dm1)
+            m2 = 1 / (4 * popt[3] * t)
+            dm2 = (pcov[3,3] ** 0.5) / (4 * t * (popt[3] ** 2))
+            m.append(m2)
+            dm.append(dm2)
+        if fit_func == "GaussLin":
+            m = []
+            dm = []
+            m1 = 1 / (4 * popt[1] * t)
+            dm1 = (pcov[1,1] ** 0.5) / (4 * t * (popt[1] ** 2))
+            m.append(m1)
+            dm.append(dm1)
+            m2 = popt[3]
+            dm2 = pcov[3,3] ** 0.5
+            m.append(m2)
+            dm.append(dm2)
+        if fit_func == "ERFLin":
+            m = []
+            dm = []
+            m1 = 1 / np.sqrt(4 * popt[1] * t)
+            dm1 = (pcov[1,1] ** 0.5) / (np.sqrt(4 * t) * (popt[1] ** 1.5))
+            m.append(m1)
+            dm.append(dm1)
+            m2 = popt[3]
+            dm2 = pcov[3, 3] ** 0.5
+            m.append(m2)
+            dm.append(dm2)
+        if fit_func == "GaussP":
+            m = []
+            dm = []
+            m1 = 1 / (4 * popt[1] * t)
+            dm1 = (pcov[1, 1] ** 0.5) / (4 * t * (popt[1] ** 2))
+            m.append(m1)
+            dm.append(dm1)
+            m.append(m2)
+            dm.append(dm2)
+        if fit_func == "ERFP":
+            m = []
+            dm = []
+            m1 = 1 / np.sqrt(4 * popt[1] * t)
+            dm1 = (pcov[1, 1] ** 0.5) / (np.sqrt(4 * t) * (popt[1] ** 1.5))
+            m.append(m1)
+            dm.append(dm1)
+            m.append(m2)
+            dm.append(dm2)
+        if fit_func == "GaussLinP":
+            m = []
+            dm = []
+            m1 = 1 / (4 * popt[1] * t)
+            dm1 = (pcov[1, 1] ** 0.5) / (4 * t * (popt[1] ** 2))
+            m.append(m1)
+            dm.append(dm1)
+            m.append(m2)
+            dm.append(dm2)
+            m3 = popt[5]
+            dm3 = pcov[5,5] ** 0.5
+            m.append(m3)
+            dm.append(dm3)
+        if fit_func == "ERFLinP":
+            m = []
+            dm = []
+            m1 = 1 / np.sqrt(4 * popt[1] * t)
+            dm1 = (pcov[1, 1] ** 0.5) / (np.sqrt(4 * t) * (popt[1] ** 1.5))
+            m.append(m1)
+            dm.append(dm1)
+            m.append(m2)
+            dm.append(dm2)
+            m3 = popt[5]
+            dm3 = pcov[5, 5] ** 0.5
+            m.append(m3)
+            dm.append(dm3)
+        if fit_func == "Strohm":
+            m = []
+            dm = []
+        fit_params = fit_params + "\n"\
+                    + "Original fit slopes:" + "\n"
+        for i in range(0, len(m), 1):
+            fit_params = fit_params + "m" + str(i+1) + " = " + str(m[i]) + " +/- " + str(dm[i]) + "\n"
+
+
+        # Write fit results into plot
+        fit_results_plot = str()
+        if fit_func == "ERF":
+            for i in range(0, len(popt), 1):
+                if popt[i] < 0.01:
+                    fit_params_single = "\n" + parameter_list[i + 1] + " = " + "{:.2e}".format(
+                        popt[i]) + "+-" + "{:.0f}".format(100 * (pcov[i, i] ** 0.5) / popt[i]) + "%"
+                else:
+                    fit_params_single = "\n" + parameter_list[i + 1] + " = " + "{:.2f}".format(
+                        popt[i]) + "+-" + "{:.0f}".format(100 * (pcov[i, i] ** 0.5) / popt[i]) + "%"
+                fit_results_plot += fit_params_single
+        elif fit_func in multi_fits_GB:
+            for i in range(1, len(popt), 2):
+                fit_params_plot = "\n" + parameter_list[i + 1] + " = " + "{:.2e}".format(popt[i]) + "$\pm$" + "{:.2f}".format(100 * (pcov[i, i] ** 0.5) / popt[i]) + "%"
+                fit_results_plot += fit_params_plot
+            fit_results_plot = fit_results_plot + "\n" + r'$\alpha$' + "/s = " + "{:.2e}".format(alpha) + "\n" \
+                                + r'$\beta$' + " = " + "{:.2f}".format(beta)
+        else:
+            for i in range(1, len(popt), 2):
+                fit_params_plot = "\n" + parameter_list[i + 1] + " = " + "{:.2e}".format(popt[i]) + "$\pm$" + "{:.0f}".format(100 * (pcov[i, i] ** 0.5) / popt[i]) + "%"
+                fit_results_plot += fit_params_plot
+
+    # Write fit results into txt file
+    fit_results = fit_func + "\n" \
+                  + str(func) + "\n" \
+                  + str(fit_params) + "\n"
+    file = open(fitresults_filename, "w")
+    file.write(fit_results)
+    file.close()
+
+    # Define plot markers
+    Markers = ["s", "o", "^", "v", "D", "p"]
+
+    # Define plot colors
+    Colors = ["b", "r", "g", "tab:orange",  "purple", "magenta"]
+
+    # Plotting preferences
+    # Define x-axis scaling (recalculation of x column in txt file)
+    x = np.linspace(df.loc[x_l_real, "y"], df.loc[x_r_real, "y"], 100000)
+    if xscale == 2:
+        # Rescale x values
+        df[Col_labels_new[0]] = df[Col_labels_new[0]] ** 2
+        df2[Col_labels_new[0]] = df2[Col_labels_new[0]] ** 2
+        # Rescale empty sections
+        for i in range(0, len(empty_section), 1):
+            empty_section[i] = empty_section[i] ** 2
+    elif xscale == 3:
+        # Rescale x values
+        df[Col_labels_new[0]] = df[Col_labels_new[0]] ** (1.2)
+        df2[Col_labels_new[0]] = df2[Col_labels_new[0]] ** (1.2)
+        # Rescale empty sections
+        for i in range(0, len(empty_section), 1):
+            empty_section[i] = empty_section[i] ** (1.2)
+    if xscale != 1 and xscale != 2 and xscale != 3:
+        log(xscale)
+        log("Error in DiffPy.py: xscale must be 1, 2 or 3!")
+        return
+    # Window size
+    fig = plt.figure(figsize=(10.00,8.00))
+    # Define font size of tick labels on the axes
+    plt.rc('xtick', labelsize=18)
+    plt.rc('ytick', labelsize=18)
+    ax = plt.gca()
+    # Setting the scientific expression of the x-axis
+    mf = matplotlib.ticker.ScalarFormatter(useMathText=True)
+    mf.set_powerlimits((-2,2))
+    plt.gca().xaxis.set_major_formatter(mf)
+    # Plot penetration profiles imported from file
+    for i in range(0, len(Fit_data), 1):
+        df.plot(kind='scatter', x=Col_labels_new[0], y=Fit_data[i], linewidth=2.0, ax=ax, color="lightgrey", marker=Markers[i]) #input
+        df2.plot(kind='scatter', x=Col_labels_new[0], y=Fit_data[i], label=Fit_data[i], linewidth=2.0, ax=ax, color=Colors[i], marker=Markers[i])
+    # x-axis preferences
+    xname = ['$\mathit{y}$', '$\mathit{y^2}$', '$\mathit{y^{1.2}}$'] # Label
+    xunit = ['m', 'm$^2$', 'm$^{1.2}$']
+    ax.set_xlabel(xname[xscale - 1] + " (" + xunit[xscale - 1] + ")", fontsize=20) # Set x-label
+    xmax = max(df["y"]) # right end of x-axis
+    if xlim_r == "max": # Set plot limits on x-axis
+        xlim_r = 1.05 * xmax
+    if xlim_r > 1.05 * xmax:
+        log(xlim_r)
+        log("Error in DiffPy.py: xlim_r cannot be larger than the maximum penetration depth!")
+        return
+    if xlim_l > xlim_r:
+        log(xlim_l)
+        log("Error in DiffPy.py: xlim_l cannot be larger than xlim_r!")
+        return
+    ax.set_xlim(xlim_l, xlim_r)
+    # y-axis preferences
+    yname = "rel. spec. Act." # Label
+    yunit = 'Bq mg$^{-1}$'
+    ax.set_ylabel(yname + " (" + yunit + ")", fontsize=20) # Set y-label
+    # Set log y-scale
+    ax.set_yscale('log') # Set log y-scale
+    # Legend preferences
+    plt.rc('legend', fontsize=18)  # Legend font size
+    plt.legend(loc="upper right")  # Legend position
+    # Tick preferences
+    ax.tick_params(which='major', direction='out', length=8, width=1)
+    ax.tick_params(which='minor', direction='out', length=5, width=1)
+    # Add top x-axis
+    if xscale == 1: ## Add top x-axis without labels
+        ax_t = ax.secondary_xaxis('top')
+        ax_t.set_xticklabels([])
+    elif xscale == 2: ## Add top x-axis with labels (bottom: x^2, top: x)
+        xold = np.arange(xlim_l, 1.05 * xlim_r, xmax/1000000)
+        xnew = xold ** 0.5
+        def forward(x):
+            return np.interp(x, xold, xnew)
+        def inverse(x):
+            return np.interp(x, xnew, xold)
+        ax_t = ax.secondary_xaxis('top', functions=(forward, inverse))
+        ax_t.set_xlim(0, )
+        ax_t.set_xlabel(xname[0] + " (m)", fontsize=20, labelpad=20)
+        ax_t.get_xaxis().set_major_formatter(mf)
+        xticks = ax_t.xaxis.get_major_ticks()
+        xticks[0].set_visible(False)
+    elif xscale == 3: ## Add top x-axis with labels (bottom: x^1.2, top: x)
+        xold = np.arange(xlim_l, 1.05 * xlim_r, xmax/1000000)
+        xnew = xold ** (5/6)
+        def forward(x):
+            return np.interp(x, xold, xnew)
+        def inverse(x):
+            return np.interp(x, xnew, xold)
+        ax_t = ax.secondary_xaxis('top', functions=(forward, inverse))
+        ax_t.set_xlim(0, )
+        ax_t.set_xlabel(xname[0] + " (m)", fontsize=20, labelpad=20)
+        ax_t.get_xaxis().set_major_formatter(mf)
+        xticks = ax_t.xaxis.get_major_ticks()
+        xticks[0].set_visible(False)
+    ax_t.tick_params(which='major', direction='in', length=8, width=1)
+    # Add right y-axis
+    ax_r = ax.secondary_yaxis('right') #mirror x and y scale
+    ax_r.tick_params(which='major', direction='in', length=8, width=1)
+    ax_r.tick_params(which='minor', direction='in', length=5, width=1)
+    ax_r.set_yticklabels([])
+    # Add text in the plot
+    plot_text = sample + "\n" + "$\mathit{T}$ = " + str(T) + " K" + "\n" "$\mathit{t}$ = " + str(t) + " s" + "\n" + "$\mathit{D_v}$ = " + "{:.3e}".format(Dv)
+    ax.text(.6, .97, plot_text,
+            horizontalalignment='center',
+            verticalalignment='top',
+            transform=ax.transAxes,
+            fontsize=18)
+    # Add Textbox with fit results
+    ax.text(.98, .75, fit_results_plot,
+            horizontalalignment='right',
+            verticalalignment='top',
+            transform=ax.transAxes,
+            fontsize=18)
+    # Plot red lines on empty section positions
+    for i in range(0, len(empty_section), 1):
+        plt.axvline(x=empty_section[i], color="r", lw=0.5)
+    # Insert Software name and version in plot
+    software_info = software_name + " - Version " + software_version
+    ax.text(.01, .01, software_info,
+            horizontalalignment='left',
+            verticalalignment='bottom',
+            transform=ax.transAxes,
+            fontsize=10)
+    # Plot
+    if fit_func in special_fits:
+        show_fit = np.exp(plot_fit(x, *popt))
+    else:
+        show_fit = plot_fit(x)
+    if xscale == 2:
+        plt.plot(x ** 2, show_fit)
+    elif xscale == 3:
+        plt.plot(x ** (1.2), show_fit)
+    else:
+        plt.plot(x, show_fit)
+    # Insert logo
+    logo = plt.imread('logo.png')
+    newax = fig.add_axes([0.01, 0.01, 0.1, 0.1], anchor='SW', zorder=-1)
+    newax.imshow(logo)
+    newax.axis('off')
+    display(fig, target="plot_area", append=False)            
+    log("Fitting...")
+    # 同样，把最后的 plt.show() 改为 display(fig, target="plot_area", append=False)
+    pass
+
+# ==========================================
+# 区域 F: 智能控制逻辑 (自动计算 + 参数读取)
+# ==========================================
+
+# 全局状态标记：是否已经计算过数据
+is_data_calculated = False
+
+# 辅助函数：解析字符串列表
+def parse_float_list(value_str):
+    if not value_str or value_str.strip() == "": return []
+    try: return [float(x.strip()) for x in value_str.split(',')]
+    except: return []
+
+def parse_int_list(value_str):
+    if not value_str or value_str.strip() == "": return []
+    try: return [int(x.strip()) for x in value_str.split(',')]
+    except: return []
+
+# --- 1. 核心计算函数 (不直接绑定按钮，供内部调用) ---
+def execute_calculation():
+    global is_data_calculated
+    filename_ext = current_filename
+    export_filename = "penetration-profile_" + filename_ext.replace(".exdat", "") + ".txt"
+    
+    if not os.path.exists(filename_ext):
+        log("Error: Please load a file first!")
+        return False
+
+    log(f"--- Auto-Running Calculation... ---")
+    
+    # 读取 Merge 参数
+    merge_str = js.document.getElementById("merge_input").value
+    merge_list = parse_int_list(merge_str)
+
+    try:
+        Calc(merge=merge_list, filename_ext=filename_ext, export_filename=export_filename)
+        is_data_calculated = True # 标记计算完成
+        return True
+    except Exception as e:
+        log(f"Calc Error: {e}")
+        return False
+
+# --- 2. 绘图按钮逻辑 ---
+def run_plot(*args):
+    # 智能判断：如果没计算过，先计算
+    if not is_data_calculated:
+        success = execute_calculation()
+        if not success: return
+
+    element = js.document.getElementById("element_input").value
+    scale = int(js.document.getElementById("xscale_input").value)
+    
+    # 读取绘图范围 (xlim)
+    try:
+        xl = float(js.document.getElementById("xlim_l_input").value)
+        xr_val = js.document.getElementById("xlim_r_input").value
+        xr = "max" if xr_val == "max" else float(xr_val)
+    except:
+        xl, xr = 0, "max"
+
+    filename_ext = current_filename
+    export_filename = "penetration-profile_" + filename_ext.replace(".exdat", "") + ".txt"
+    
+    log(f"--- Plotting {element} ---")
+    try:
+        Graph(filename_ext, export_filename, [element], scale, xl, xr, "DiffPy Web", "2.0")
+    except Exception as e:
+        log(f"Plot Error: {e}")
+
+# --- 3. 拟合按钮逻辑 ---
+def run_fit(*args):
+    # 智能判断
+    if not is_data_calculated:
+        success = execute_calculation()
+        if not success: return
+
+    log("--- Starting Fitting ---")
+    filename_ext = current_filename
+    export_filename = "penetration-profile_" + filename_ext.replace(".exdat", "") + ".txt"
+    fitresults_filename = "fit_results.txt"
+
+    # 获取所有新参数
+    Fit_data = [js.document.getElementById("element_input").value]
+    fit_func = js.document.getElementById("fit_func_input").value
+    scale = int(js.document.getElementById("xscale_input").value)
+    
+    # 拟合范围
+    try:
+        xfit_l = int(js.document.getElementById("xfit_l_input").value)
+        r_val = js.document.getElementById("xfit_r_input").value
+        xfit_r = "max" if r_val == "max" else int(r_val)
+    except:
+        xfit_l, xfit_r = 1, "max"
+
+    # 列表参数
+    init_param = parse_float_list(js.document.getElementById("init_param_input").value)
+    exclude = parse_int_list(js.document.getElementById("exclude_input").value)
+
+    # 其他参数
+    fix_Dv = js.document.getElementById("fix_dv_input").value
+    
+    # Strohm 参数 (x0, sigma)
+    strohm_str = js.document.getElementById("strohm_params").value
+    strohm_list = parse_float_list(strohm_str)
+    x0 = strohm_list[0] if len(strohm_list) > 0 else 0
+    sigma = strohm_list[1] if len(strohm_list) > 1 else 0
+
+    log(f"Fitting with {fit_func}...")
+
+    try:
+        Fitting(
+            filename_ext, export_filename, fitresults_filename, 
+            xfit_l, xfit_r, exclude, Fit_data, fit_func, 
+            scale, 0, 'max', init_param, fix_Dv, x0, sigma, 
+            "DiffPy Web", "2.0"
+        )
+        log("Fitting Complete.")
+    except Exception as e:
+        log(f"Fit Error: {e}")
+        import traceback
+        traceback.print_exc()
+
+# ==========================================
+# 5. 手动绑定按钮 (必须保留)
+# ==========================================
+print("--- Python System Check: Alive ---") 
+
+from pyodide.ffi import create_proxy
+import asyncio
+
+def manual_load_click(event):
+    # 每次加载新文件，重置计算状态
+    global is_data_calculated
+    is_data_calculated = False 
+    asyncio.ensure_future(load_file_to_vfs(event))
+
+# 绑定加载按钮
+btn_obj = js.document.getElementById("btn_load")
+if btn_obj:
+    click_proxy = create_proxy(manual_load_click)
+    btn_obj.addEventListener("click", click_proxy)
+
+# 绑定 Plot 和 Fit 按钮 (直接使用 js.document 获取)
+btn_plot = js.document.getElementById("btn_plot")
+btn_fit = js.document.getElementById("btn_fit")
+
+if btn_plot: btn_plot.addEventListener("click", create_proxy(run_plot))
+if btn_fit:  btn_fit.addEventListener("click", create_proxy(run_fit))
+
+
+</py-script>
+</body>
+</html>
