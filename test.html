@@ -242,6 +242,7 @@ from scipy import special
 import os
 import math
 import datetime
+import inspect
 from pyodide.ffi import create_proxy
 
 # ==========================================
@@ -254,9 +255,10 @@ Halflife = {'Ag-110m' : 21585312, 'Cd111m' : 2910, 'Co-57' : 23478336, 'Cr-51' :
 # ==========================================
 # 区域 B: 定义工具函数 (日志和文件处理)
 # ==========================================
-def log(message):
+def log(*messages):
+    message = " ".join(str(m) for m in messages)
     log_div = js.document.getElementById("log")
-    log_div.innerHTML += f"<br>{message}"
+    log_div.innerHTML += f"\n\n{message}"
     log_div.scrollTop = log_div.scrollHeight
 
 
