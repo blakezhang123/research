@@ -49,10 +49,10 @@
         .panel h4 { margin: 0 0 5px 0; border-bottom: 2px solid #ddd; padding-bottom: 3px; font-size: 1em; color: #2c3e50; }
 
         /* 图表区限制 */
-        plot_area { flex: 1; background: white; border-radius: 8px; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 0; }
+        #plot_area { flex: 1; background: white; border-radius: 8px; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 0; }
 
         /* 强制限制图片大小，让它自适应右侧区域 */
-        plot_area img {
+        #plot_area img {
             max-width: 100% !important;  /* 宽度不超过父容器 */
             height: auto !important;     /* 高度自动 */
             display: block;
@@ -1654,6 +1654,7 @@ if btn_fit:  btn_fit.addEventListener("click", create_proxy(run_fit))
 </py-script>
 </body>
 </html>
+
 
 
 
