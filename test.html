@@ -1665,6 +1665,13 @@ def run_fit(*args):
         xfit_r = "max" if r_val == "max" else int(r_val)
     except:
         xfit_l, xfit_r = 1, "max"
+    # 读取绘图范围 (xlim)
+    try:
+        xl = float(js.document.getElementById("xlim_l_input").value)
+        xr_val = js.document.getElementById("xlim_r_input").value
+        xr = "max" if xr_val == "max" else float(xr_val)
+    except:
+        xl, xr = 0, "max"
 
     # 列表参数
     init_param = parse_float_list(js.document.getElementById("init_param_input").value)
@@ -1685,7 +1692,7 @@ def run_fit(*args):
         Fitting(
             filename_ext, export_filename, fitresults_filename, 
             xfit_l, xfit_r, exclude, Fit_data, fit_func, 
-            scale, 0, 'max', init_param, fix_Dv, x0, sigma, 
+            scale, xl, xr, init_param, fix_Dv, x0, sigma, 
             "DiffPy Web", "2.0"
         )
         log("Fitting Complete.")
