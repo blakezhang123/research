@@ -5,166 +5,535 @@
     <title>DiffPy Web Version</title>
     <link rel="stylesheet" href="https://pyscript.net/releases/2023.05.1/pyscript.css" />
     <script defer src="https://pyscript.net/releases/2023.05.1/pyscript.js"></script>
+    <script>
+        // ===== Fit History Cache (localStorage) =====
+        const FIT_HISTORY_KEY = "diffpy_fit_history_v1";
+        const FIT_HISTORY_MAX = 10;
+        
+        window.fitHistory = JSON.parse(localStorage.getItem(FIT_HISTORY_KEY) || "[]");
+        
+        function persistHistory() {
+          localStorage.setItem(FIT_HISTORY_KEY, JSON.stringify(window.fitHistory.slice(0, FIT_HISTORY_MAX)));
+        }
+        
+        function refreshHistorySelect() {
+          const sel = document.getElementById("fit_history_select");
+          if (!sel) return;
+        
+          sel.innerHTML = "";
+          window.fitHistory.forEach((item, idx) => {
+            const opt = document.createElement("option");
+            opt.value = String(idx);
+            opt.textContent = item.label || ("Fit #" + idx);
+            sel.appendChild(opt);
+          });
+        
+          if (window.fitHistory.length === 0) {
+            const opt = document.createElement("option");
+            opt.value = "0";
+            opt.textContent = "(empty)";
+            sel.appendChild(opt);
+          }
+        }
+        
+        function showHistoryByIndex(idx) {
+          const item = window.fitHistory[idx];
+          if (!item) return;
+        
+          // 1) 切回这次拟合图（直接用缓存的 PNG）
+          const plot = document.getElementById("plot_area");
+          plot.innerHTML = `<img src="${item.png}" style="max-width:100%;max-height:100%;object-fit:contain;">`;
+        
+          // 2) 显示这次拟合结果文本
+          const pre = document.getElementById("fit_history_text");
+          pre.textContent = item.text || "";
+        }
+        
+        // Python 会调用这个函数（传 JSON 字符串）
+        function addFitHistoryFromPython(jsonStr) {
+          const item = JSON.parse(jsonStr);
+        
+          // 最新的放最前
+          window.fitHistory.unshift(item);
+          if (window.fitHistory.length > FIT_HISTORY_MAX) window.fitHistory.pop();
+        
+          persistHistory();
+          refreshHistorySelect();
+          showHistoryByIndex(0);
+        }
+        
+        // 页面启动时恢复
+        refreshHistorySelect();
+        if (window.fitHistory.length > 0) showHistoryByIndex(0);
+        
+        // 按钮事件
+        document.getElementById("btn_show_history")?.addEventListener("click", () => {
+          const idx = parseInt(document.getElementById("fit_history_select").value, 10) || 0;
+          showHistoryByIndex(idx);
+        });
+        
+        document.getElementById("btn_delete_history")?.addEventListener("click", () => {
+          const sel = document.getElementById("fit_history_select");
+          const idx = parseInt(sel.value, 10) || 0;
+          window.fitHistory.splice(idx, 1);
+          persistHistory();
+          refreshHistorySelect();
+          if (window.fitHistory.length > 0) showHistoryByIndex(0);
+          else document.getElementById("fit_history_text").textContent = "(No cached history yet)";
+        });
+        document.getElementById("btn_clear_history")?.addEventListener("click", () => {
+          window.fitHistory = [];
+          localStorage.removeItem(FIT_HISTORY_KEY);
+          refreshHistorySelect();
+          document.getElementById("fit_history_text").textContent = "(No cached history yet)";
+          document.getElementById("plot_area").innerHTML = "";
+        });
+    
+        const DB_NAME = "diffpy_fit_db";
+        const DB_VER  = 1;
+        const STORE   = "fits";
+        const MAX_KEEP = 20; // 可选：最多保留 N 次，防止无限增长
+        
+        function openDB() {
+          return new Promise((resolve, reject) => {
+            const req = indexedDB.open(DB_NAME, DB_VER);
+            req.onupgradeneeded = () => {
+              const db = req.result;
+              const os = db.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
+              os.createIndex("ts", "ts");
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+          });
+        }
+        
+        function txDone(tx) {
+          return new Promise((resolve, reject) => {
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error);
+          });
+        }
+        
+        function b64ToBlob(b64, mime="image/png") {
+          const bin = atob(b64);
+          const chunk = 1024;
+          const parts = [];
+          for (let i = 0; i < bin.length; i += chunk) {
+            const slice = bin.slice(i, i + chunk);
+            const bytes = new Uint8Array(slice.length);
+            for (let j = 0; j < slice.length; j++) bytes[j] = slice.charCodeAt(j);
+            parts.push(bytes);
+          }
+          return new Blob(parts, { type: mime });
+        }
+        
+        // 避免 objectURL 泄漏：切换图片前 revoke
+        let _currentObjectUrl = null;
+        
+        async function listFits() {
+          const db = await openDB();
+          const tx = db.transaction(STORE, "readonly");
+          const idx = tx.objectStore(STORE).index("ts");
+          const items = [];
+        
+          await new Promise((resolve, reject) => {
+            idx.openCursor(null, "prev").onsuccess = (e) => {
+              const cur = e.target.result;
+              if (cur) { items.push(cur.value); cur.continue(); }
+              else resolve();
+            };
+            tx.onerror = () => reject(tx.error);
+          });
+        
+          db.close();
+          return items;
+        }
+        
+        async function refreshFitSelect() {
+          const sel = document.getElementById("fit_history_select");
+          if (!sel) return;
+          const items = await listFits();
+          sel.innerHTML = "";
+        
+          if (items.length === 0) {
+            const opt = document.createElement("option");
+            opt.value = "";
+            opt.textContent = "(empty)";
+            sel.appendChild(opt);
+            return;
+          }
+        
+          for (const it of items) {
+            const opt = document.createElement("option");
+            opt.value = String(it.id);
+            opt.textContent = `${new Date(it.ts).toLocaleString()} | ${it.label}`;
+            sel.appendChild(opt);
+          }
+        }
+        
+        async function showFitById(id) {
+          if (!id) return;
+        
+          const db = await openDB();
+          const tx = db.transaction(STORE, "readonly");
+          const os = tx.objectStore(STORE);
+        
+          const item = await new Promise((resolve, reject) => {
+            const req = os.get(Number(id));
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+          });
+        
+          db.close();
+          if (!item) return;
+        
+          // 1) 文本
+          document.getElementById("fit_history_text").textContent = item.text || "";
+        
+          // 2) 图（Blob -> objectURL）
+          if (_currentObjectUrl) URL.revokeObjectURL(_currentObjectUrl); // 建议做，避免累积占用内存 [web:38]
+          _currentObjectUrl = URL.createObjectURL(item.png);
+        
+          const plot = document.getElementById("plot_area");
+          plot.innerHTML = `<img src="${_currentObjectUrl}" style="max-width:100%;max-height:100%;object-fit:contain;">`;
+        }
+        
+        // 供 Python 调用：写入一条 fit 记录（图存 Blob）
+        async function fitDBAddFit(label, text, png_b64) {
+          const db = await openDB();
+          const tx = db.transaction(STORE, "readwrite");
+          tx.objectStore(STORE).add({
+            ts: Date.now(),
+            label,
+            text,
+            png: b64ToBlob(png_b64, "image/png")
+          });
+          await txDone(tx);
+          db.close();
+        
+          // 可选：修剪旧记录
+          const items = await listFits();
+          const extra = items.slice(MAX_KEEP); // items 已按 ts desc
+          for (const it of extra) await fitDBDeleteFit(it.id);
+        
+          await refreshFitSelect();
+        }
+        
+        async function fitDBDeleteFit(id) {
+          const db = await openDB();
+          const tx = db.transaction(STORE, "readwrite");
+          tx.objectStore(STORE).delete(Number(id));
+          await txDone(tx);
+          db.close();
+        }
+        
+        async function fitDBClearAll() {
+          const db = await openDB();
+          const tx = db.transaction(STORE, "readwrite");
+          tx.objectStore(STORE).clear();
+          await txDone(tx);
+          db.close();
+        
+          if (_currentObjectUrl) { URL.revokeObjectURL(_currentObjectUrl); _currentObjectUrl = null; } // [web:38]
+          document.getElementById("fit_history_text").textContent = "(No cached history yet)";
+          await refreshFitSelect();
+        }
+        
+        // 页面加载后初始化下拉框
+        window.addEventListener("load", () => refreshFitSelect());
+        
+        // 绑定按钮（你把 HTML 按钮加好后就能用）
+        document.addEventListener("click", async (e) => {
+          if (e.target?.id === "btn_show_history") {
+            const id = document.getElementById("fit_history_select").value;
+            await showFitById(id);
+          }
+          if (e.target?.id === "btn_delete_history") {
+            const id = document.getElementById("fit_history_select").value;
+            if (id) await fitDBDeleteFit(id);
+            await refreshFitSelect();
+          }
+          if (e.target?.id === "btn_clear_history") {
+            await fitDBClearAll();
+          }
+        });
+    
+    </script>
     <style>
-        /* 全局紧凑设置 */
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; background: #f4f7f6; height: 100vh; display: flex; flex-direction: column; }
-        header { background: #2c3e50; color: white; padding: 10px 20px; font-weight: bold; font-size: 1.1em; flex: 0 0 auto; }
-        
-        /* 主容器：固定高度，不可滚动整个页面 */
-        .container { display: flex; flex: 1; overflow: hidden; }
-        
-        /* 左侧控制栏：加宽、紧凑布局、可独立滚动 */
-        .controls { 
-            width: 380px; /* 加宽到 380px */
-            background: #fff; border-right: 1px solid #ddd; 
-            padding: 15px; overflow-y: auto; 
-            display: flex; flex-direction: column; gap: 10px;
-            font-size: 0.9em; /* 字体稍微改小，显示更多内容 */
-        }
-
-        /* 右侧显示区 */
-        .output { flex: 1; display: flex; flex-direction: column; padding: 10px; background: #eaeff2; gap: 10px; overflow: hidden; }
-
-        /* --- 紧凑布局核心：Grid 网格 --- */
-        .grid-row { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; align-items: center; }
-        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; }
-
-        /* 控件样式 */
-        label { font-weight: 600; color: #34495e; margin-bottom: 2px; display: block; font-size: 0.9em;}
-        input, select { width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; height: 28px;}
-        
-        /* 按钮组 (替代下拉菜单) */
-        .btn-group { display: flex; border: 1px solid #ccc; border-radius: 4px; overflow: hidden; }
-        .btn-group input { display: none; }
-        .btn-group label { flex: 1; text-align: center; padding: 5px 0; background: #f1f1f1; cursor: pointer; border-right: 1px solid #ddd; margin: 0; font-weight: normal;}
-        .btn-group label:last-child { border-right: none; }
-        .btn-group input:checked + label { background: #3498db; color: white; font-weight: bold; }
-
-        /* 操作按钮 */
-        button.action-btn { width: 100%; padding: 8px; border: none; border-radius: 4px; color: white; font-weight: bold; cursor: pointer; margin-top: 5px; }
-        button.action-btn:hover { opacity: 0.9; }
-        
-        /* 分组框 */
-        .panel { border: 1px solid #eee; border-radius: 6px; padding: 8px; background: #fafafa; }
-        .panel h4 { margin: 0 0 5px 0; border-bottom: 2px solid #ddd; padding-bottom: 3px; font-size: 1em; color: #2c3e50; }
-
-        /* 图表区限制 */
-        #plot_area { flex: 1; background: white; border-radius: 8px; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 0; }
-
-        /* 强制限制图片大小，让它自适应右侧区域 */
-        #plot_area img {
-            max-width: 100% !important;  /* 宽度不超过父容器 */
-            height: auto !important;     /* 高度自动 */
-            display: block;
-            margin: 0 auto;              /* 居中显示 */
-        }
-        
-        /* 隐藏 PyScript 那些默认产生的多余文字/元素 */
-        py-loader {
-            display: none;
-        }        
-        
-        /* 日志区 */
-        #log { height: 100px; background: #222; color: #0f0; padding: 8px; font-family: monospace; font-size: 0.85em; overflow-y: auto; border-radius: 6px; flex: 0 0 auto; }
-    </style>       
+      :root {
+        --control-width: 320px;
+        --control-padding: 12px;
+        --control-gap: 8px;
+        --label-font-size: 0.85em;
+        --input-font-size: 0.92em;
+        --small-btn-padding: 8px 10px;
+        --bg: #f5f7fa;
+      }
+  
+      /* 页面整体 */
+      body {
+        font-family: 'Segoe UI', sans-serif;
+        padding: 16px;
+        max-width: 1600px;
+        margin: 0 auto;
+        background-color: var(--bg);
+      }
+  
+      .container {
+        display: flex;
+        gap: 16px;
+        height: 90vh;
+        align-items: flex-start;
+      }
+  
+      /* 左侧控制区（更窄、更紧凑） */
+      .controls {
+        flex: 0 0 var(--control-width); /* 宽度从 400 -> 320 */
+        padding: var(--control-padding);
+        background: #ffffff;
+        border-radius: 10px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.04);
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: var(--control-gap);
+        font-size: var(--input-font-size);
+        max-height: calc(90vh - 32px);
+      }
+  
+      .controls h3 { margin: 0; font-size: 1em; padding-bottom: 4px; }
+  
+      /* 右侧显示区 */
+      .output { flex: 1; display: flex; flex-direction: column; gap: 15px; overflow: hidden; }
+  
+      /* 图表区略微减小最小高度 */
+      #plot_area {
+        flex: 2;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        display: flex; justify-content: center; align-items: center;
+        overflow: hidden;
+        min-height: 360px;
+      }
+      #plot_area img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  
+      /* 日志区 */
+      #log {
+        flex: 1;
+        background: #2c3e50;
+        color: #2ecc71;
+        padding: 12px;
+        font-family: monospace;
+        border-radius: 12px;
+        overflow-y: auto;
+        font-size: 0.85em;
+      }
+      
+      
+  
+      /* 控件样式微调（更紧凑） */
+      #file_status { font-size: 0.78em; color: gray; margin-top: 3px; }
+      label {
+        margin-top: 6px;
+        font-weight: 600;
+        color: #34495e;
+        font-size: var(--label-font-size);
+        display: block;
+      }
+      input, select {
+        width: 100%;
+        padding: 6px;
+        margin-top: 4px;
+        border: 1px solid #e1e6e9;
+        border-radius: 6px;
+        box-sizing: border-box;
+        font-size: var(--input-font-size);
+      }
+      button {
+        margin-top: 10px;
+        padding: var(--small-btn-padding);
+        border-radius: 7px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        transition: 0.15s;
+        font-size: 0.95em;
+      }
+      button:hover { opacity: 0.95; transform: translateY(-1px); }
+  
+      /* 将 .row 改为两列 grid，更稳定且紧凑 */
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        align-items: center;
+      }
+  
+      /* 紧凑变体（可选） */
+      .controls.compact input, .controls.compact select { padding: 5px; }
+      .controls.compact label { font-size: 0.82em; }
+      .controls.compact button { padding: 7px 10px; font-size: 0.9em; }
+  
+      /* 小屏幕自适应 */
+      @media (max-width: 1000px) {
+        .container { flex-direction: column; height: auto; }
+        .controls { width: 100%; flex: 0 0 auto; max-height: 300px; }
+      }
+    </style>
 </head>
+<script>
+  // 你的 openDB / b64ToBlob / listFits / refreshFitSelect / showFitById / fitDBAddFit / fitDBClearAll ... 全放这里
+
+  // 关键：显式导出给 window，保证 PyScript 可见
+  window.fitDBAddFit = fitDBAddFit;
+  window.fitDBClearAll = fitDBClearAll;
+  window.refreshFitSelect = refreshFitSelect;
+  window.showFitById = showFitById;
+
+  window.addEventListener("load", () => refreshFitSelect());
+</script>
+
 <body>
 
 <h1>DiffPy Web Analysis</h1>
 
-<div class="container-fluid" style="margin-top: 20px;">
-    <div class="row">
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-header">
-                    <strong>1. Data Source</strong>
-                </div>
-                <div class="card-body">
-                    <input type="file" id="file_upload" class="form-control mb-2">
-                    <button id="load_btn" class="btn btn-primary w-100" py-click="load_file_to_vfs">
-                        Load File
-                    </button>
-                    <div id="file_status" class="mt-2" style="font-size: 0.9em; color: gray;">
-                        Ready to load...
-                    </div>
-                </div>
-            </div>
-
-            <br>
-
-            <div class="card">
-                <div class="card-header">
-                    <strong>2. Plot Settings</strong>
-                </div>
-                <div class="card-body">
-                    <div class="row g-2">
-                        <div class="col-6">
-                            <label>Tracer</label>
-                            <input type="text" id="tracer_input" class="form-control" value="Ag">
-                        </div>
-                        <div class="col-6">
-                            <label>Merge</label>
-                            <input type="text" id="merge_input" class="form-control" placeholder="e.g. 1, 2">
-                        </div>
-                    </div>
-                    
-                    <label class="mt-2">X-Axis Scale</label>
-                    <div class="btn-group w-100" role="group">
-                         <input type="radio" class="btn-check" name="xscale" id="btnradio1" autocomplete="off" checked>
-                        <label class="btn btn-outline-primary" for="btnradio1">Linear</label>
-
-                        <input type="radio" class="btn-check" name="xscale" id="btnradio2" autocomplete="off">
-                        <label class="btn btn-outline-primary" for="btnradio2">y²</label>
-
-                        <input type="radio" class="btn-check" name="xscale" id="btnradio3" autocomplete="off">
-                        <label class="btn btn-outline-primary" for="btnradio3">y¹.²</label>
-                    </div>
-
-                    <div class="row g-2 mt-2">
-                        <div class="col-6">
-                            <label>Limit L</label>
-                            <input type="text" id="xlim_l" class="form-control" value="0">
-                        </div>
-                        <div class="col-6">
-                            <label>Limit R</label>
-                            <input type="text" id="xlim_r" class="form-control" value="max">
-                        </div>
-                    </div>
-
-                    <button id="plot_btn" class="btn btn-success w-100 mt-3" py-click="run_plot_logic">
-                        Update Plot
-                    </button>
-                </div>
-            </div>
-            
-             <div class="card mt-3">
-                 <div class="card-body">
-                    <button id="fit_btn" class="btn btn-danger w-100" py-click="run_fit_logic">
-                        Run Fit Analysis
-                    </button>
-                 </div>
-            </div>
-        </div>
-
-        <div class="col-md-9">
-            <div class="card h-100">
-                <div class="card-header">
-                    Analysis Result
-                </div>
-                <div class="card-body d-flex justify-content-center align-items-center" style="min-height: 500px; background-color: #f8f9fa;">
-                    
-                    <div id="plot_area">
-                        <p class="text-muted">Plot will appear here...</p>
-                    </div>
-
-                </div>
-            </div>
+<div class="container">
+    <div class="controls">
+        <h3>1. Data Import</h3>
+        <input type="file" id="file_upload" />
+        <button id="btn_load" style="background:#3498db; color:white;">Load File</button>
+        <div id="file_status" style="font-size: 0.8em; color: gray; margin-top:5px;">No file loaded</div>
+    
+        <hr style="border-top:1px solid #eee; width:100%;">
+        
+        <h3>2. Settings</h3>
+        <div class="row">
+            <div><label>Tracer:</label><input type="text" id="element_input" value="Ag"></div>
+            <div><label>Merge:</label><input type="text" id="merge_input" placeholder="e.g. 1, 2"></div>
         </div>
         
-    </div> </div> 
+        <label>X-Scale:</label>
+        <select id="xscale_input">
+            <option value="1">Linear (y)</option>
+            <option value="2">Square (y²)</option>
+            <option value="3">Power (y^1.2)</option>
+        </select>
+
+        <div class="row">
+            <div><label>Plot Limit (L):</label><input type="number" id="xlim_l_input" value="0"></div>
+            <div><label>Plot Limit (R):</label><input type="text" id="xlim_r_input" value="max"></div>
+        </div>
+    
+        <hr style="border-top:1px solid #eee; width:100%;">
+
+        <h3>3. Fitting</h3>
+        <label>Fit Function:</label>
+        <select id="fit_func_input">
+            <optgroup label="Standard">
+                <option value="Gauss">Gauss</option>
+                <option value="Linear">Linear</option>
+                <option value="P">Suzuoka (P)</option>
+                <option value="ERF">ERF</option>
+            </optgroup>
+            <optgroup label="Double/Triple">
+                <option value="Gaussx2">Gauss x2</option>
+                <option value="Gaussx3">Gauss x3</option>
+                <option value="ERFGauss">ERF + Gauss</option>
+            </optgroup>
+            <optgroup label="Complex (GB)">
+                <option value="GaussP">Gauss + P</option>
+                <option value="ERFP">ERF + P</option>
+                <option value="GaussLinP">Gauss + Linear + P</option>
+                <option value="ERFLinP">ERF + Linear + P</option>
+            </optgroup>
+            <optgroup label="Special">
+                <option value="Strohm">Strohm</option>
+            </optgroup>
+        </select>
+    
+        <div class="row">
+            <div><label>Fit Range (L):</label><input type="number" id="xfit_l_input" value="1"></div>
+            <div><label>Fit Range (R):</label><input type="text" id="xfit_r_input" value="max"></div>
+        </div>
+    
+        <label>Initial Params (C, D, ...):</label>
+        <input type="text" id="init_param_input" value="100, 2e-17">
+        
+        <label>Exclude Points (Indices):</label>
+        <input type="text" id="exclude_input" placeholder="e.g. 1, 5">
+
+        <div class="row">
+            <div><label>Fix Dv?</label>
+                <select id="fix_dv_input">
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                </select>
+            </div>
+            <div><label>x0 / sigma (Strohm)</label>
+                <input type="text" id="strohm_params" placeholder="0, 0" value="0, 0">
+            </div>
+        </div>
+    
+        <hr style="border-top:1px solid #eee; width:100%;">
+        
+        <button id="btn_plot" style="background:#2ecc71; color:white;">Update Plot</button>
+        <button id="btn_fit" style="background:#e74c3c; color:white;">Run Fit</button>
+        <button id="btn_clear_history" style="background:#c0392b; color:white;">Clear All</button>
+
+    <!-- 放在 plot_area 或 log 下面：用于显示上一次拟合的参数与结果 -->
+    <div class="box">
+      <h3>Last Fit (cached)</h3>
+      <pre id="fit_cache" style="white-space: pre-wrap; font-family: monospace; font-size: 0.9em; margin: 0;">
+    No cached fit yet.
+      </pre>
+    </div>
+
+    </div> <div class="output">
+        <div id="plot_area">
+            <div style="text-align:center; color:gray; padding-top:50px;">
+                Plot will appear here...
+            </div>
+        </div>
+        <div id="log">System Ready...</div>
+    </div>
+
+    <div class="box">
+      <h3>Fit History (IndexedDB)</h3>
+    
+      <div class="row">
+        <div style="flex:1;">
+          <label>History</label>
+          <select id="fit_history_select"></select>
+        </div>
+        <div style="width:120px;">
+          <label>&nbsp;</label>
+          <button id="btn_show_history" style="background:#34495e;color:white;">Show</button>
+        </div>
+        <div style="width:120px;">
+          <label>&nbsp;</label>
+          <button id="btn_delete_history" style="background:#7f8c8d;color:white;">Delete</button>
+        </div>
+        <div style="width:120px;">
+          <label>&nbsp;</label>
+          <button id="btn_clear_history" style="background:#c0392b;color:white;">Clear</button>
+        </div>
+      </div>
+    
+      <label>Cached Result</label>
+      <pre id="fit_history_text" style="white-space: pre-wrap; font-family: monospace; font-size: 0.85em; margin:0;">
+    (No cached history yet)
+      </pre>
+    </div>
+
+
+      
+        
+
 <py-config>
     packages = ["pandas", "numpy", "matplotlib", "scipy"]
-    terminal = false  
+    terminal = false 
     [[fetch]]
     files = ["logo.png"]    
 </py-config>
@@ -181,7 +550,8 @@ from scipy import special
 import os
 import math
 import datetime
-import asyncio
+import inspect
+import io,base64
 from pyodide.ffi import create_proxy
 
 # ==========================================
@@ -194,9 +564,10 @@ Halflife = {'Ag-110m' : 21585312, 'Cd111m' : 2910, 'Co-57' : 23478336, 'Cr-51' :
 # ==========================================
 # 区域 B: 定义工具函数 (日志和文件处理)
 # ==========================================
-def log(message):
+def log(*messages):
+    message = " ".join(str(m) for m in messages)
     log_div = js.document.getElementById("log")
-    log_div.innerHTML += f"<br>{message}"
+    log_div.innerHTML += f"\n\n{message}"
     log_div.scrollTop = log_div.scrollHeight
 
 
@@ -1509,65 +1880,81 @@ def Fitting(filename_ext, export_filename, fitresults_filename, xfit_l, xfit_r, 
     log("Fitting...")
     # 同样，把最后的 plt.show() 改为 display(fig, target="plot_area", append=False)
     pass
+    
+    # === 在 Fitting() 末尾加入：写入 IndexedDB 历史 ===
+    try:
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=130, bbox_inches="tight")
+        png_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    
+        label = f"{fit_func} | FitIdx {xfit_l}-{xfit_r}"  # 变量名按你 Fitting() 里的实际命名调整
+        js.window.fitDBAddFit(label, fit_results, png_b64)   # fit_results 必须是你在 Fitting() 里写入txt的那个字符串
+    except Exception as e:
+        log(f"History store error: {e}")
 
 
 # ==========================================
-# 区域 F: 智能交互逻辑 (Glue Code)
-# 请替换掉原代码最底部 run_calc, run_plot 等函数
+# 区域 F: 智能控制逻辑 (自动计算 + 参数读取)
 # ==========================================
 
-# 状态标记
-is_data_ready = False
+# 全局状态标记：是否已经计算过数据
+is_data_calculated = False
 
-# 辅助解析函数
-def get_float_list(id):
-    val = js.document.getElementById(id).value
-    if not val: return []
-    try: return [float(x.strip()) for x in val.split(',')]
+# 辅助函数：解析字符串列表
+def parse_float_list(value_str):
+    if not value_str or value_str.strip() == "": return []
+    try: return [float(x.strip()) for x in value_str.split(',')]
     except: return []
 
-def get_int_list(id):
-    val = js.document.getElementById(id).value
-    if not val: return []
-    try: return [int(x.strip()) for x in val.split(',')]
+def parse_int_list(value_str):
+    if not value_str or value_str.strip() == "": return []
+    try: return [int(x.strip()) for x in value_str.split(',')]
     except: return []
 
-# --- 自动计算逻辑 (内部调用) ---
-def ensure_calculation():
-    global is_data_ready
+# --- 1. 核心计算函数 (不直接绑定按钮，供内部调用) ---
+def execute_calculation():
+    global is_data_calculated
     filename_ext = current_filename
     export_filename = "penetration-profile_" + filename_ext.replace(".exdat", "") + ".txt"
     
     if not os.path.exists(filename_ext):
-        log("Error: No file loaded!", "error")
+        log("Error: Please load a file first!")
         return False
 
-    # 读取合并参数
-    merge = get_int_list("merge_input")
+    log(f"--- Auto-Running Calculation... ---")
     
+    # 读取 Merge 参数
+    merge_str = js.document.getElementById("merge_input").value
+    merge_list = parse_int_list(merge_str)
+
     try:
-        # 调用核心计算
-        Calc(merge=merge, filename_ext=filename_ext, export_filename=export_filename)
-        is_data_ready = True
+        Calc(merge=merge_list, filename_ext=filename_ext, export_filename=export_filename)
+        is_data_calculated = True # 标记计算完成
         return True
     except Exception as e:
-        log(f"Calc Failed: {e}", "error")
+        log(f"Calc Error: {e}")
         return False
 
-# --- 按钮 1: 绘图 (自动触发计算) ---
-def run_plot(*args):
-    # 如果还没计算过，先计算
-    if not is_data_ready:
-        if not ensure_calculation(): return
+# --- 2. 绘图按钮逻辑 ---
+def _set_fit_cache(text: str):
+    js.document.getElementById("fit_cache").textContent = text
+    js.window.localStorage.setItem("diffpy_last_fit", text)
 
-    # 读取参数
+def _load_fit_cache_on_start():
+    saved = js.window.localStorage.getItem("diffpy_last_fit")
+    if saved:
+        js.document.getElementById("fit_cache").textContent = saved
+
+def run_plot(*args):
+    # 智能判断：如果没计算过，先计算
+    if not is_data_calculated:
+        success = execute_calculation()
+        if not success: return
+
     element = js.document.getElementById("element_input").value
+    scale = int(js.document.getElementById("xscale_input").value)
     
-    # 读取新的按钮组 (Radio Group)
-    scale_el = js.document.querySelector('input[name="xscale"]:checked')
-    scale = int(scale_el.value) if scale_el else 1
-    
-    # 读取范围
+    # 读取绘图范围 (xlim)
     try:
         xl = float(js.document.getElementById("xlim_l_input").value)
         xr_val = js.document.getElementById("xlim_r_input").value
@@ -1578,85 +1965,113 @@ def run_plot(*args):
     filename_ext = current_filename
     export_filename = "penetration-profile_" + filename_ext.replace(".exdat", "") + ".txt"
     
-    log(f"--- Plotting ({element}) ---")
+    log(f"--- Plotting {element} ---")
     try:
-        Graph(filename_ext, export_filename, [element], scale, xl, xr, "DiffPy", "2.0")
+        Graph(filename_ext, export_filename, [element], scale, xl, xr, "DiffPy Web", "2.0")
     except Exception as e:
-        log(f"Plot Error: {e}", "error")
+        log(f"Plot Error: {e}")
 
-# --- 按钮 2: 拟合 (自动触发计算) ---
+# --- 3. 拟合按钮逻辑 ---
 def run_fit(*args):
-    if not is_data_ready:
-        if not ensure_calculation(): return
+    # 智能判断
+    if not is_data_calculated:
+        success = execute_calculation()
+        if not success: return
 
-    log("--- Starting Fit ---")
+    log("--- Starting Fitting ---")
     filename_ext = current_filename
     export_filename = "penetration-profile_" + filename_ext.replace(".exdat", "") + ".txt"
+    fitresults_filename = "fit_results.txt"
+
+    # 获取所有新参数
+    Fit_data = [js.document.getElementById("element_input").value]
+    fit_func = js.document.getElementById("fit_func_input").value
+    scale = int(js.document.getElementById("xscale_input").value)
     
-    # 读取所有拟合参数
-    el = js.document.getElementById("element_input").value
-    func = js.document.getElementById("fit_func_input").value
-    
-    # 范围
+    # 拟合范围
     try:
-        xl = int(js.document.getElementById("xfit_l_input").value)
-        xr_val = js.document.getElementById("xfit_r_input").value
-        xr = "max" if xr_val == "max" else int(xr_val)
+        xfit_l = int(js.document.getElementById("xfit_l_input").value)
+        r_val = js.document.getElementById("xfit_r_input").value
+        xfit_r = "max" if r_val == "max" else int(r_val)
     except:
-        xl, xr = 1, "max"
-        
+        xfit_l, xfit_r = 1, "max"
+    
+    # 读取绘图范围 (xlim)
+    try:
+        xl = float(js.document.getElementById("xlim_l_input").value)
+        xr_val = js.document.getElementById("xlim_r_input").value
+        xr = "max" if xr_val == "max" else float(xr_val)
+    except:
+        xl, xr = 0, "max"    
+
     # 列表参数
-    init = get_float_list("init_param_input")
-    exclude = get_int_list("exclude_input")
+    init_param = parse_float_list(js.document.getElementById("init_param_input").value)
+    exclude = parse_int_list(js.document.getElementById("exclude_input").value)
+
+    # 其他参数
+    fix_Dv = js.document.getElementById("fix_dv_input").value
     
-    # 高级参数
-    fix_dv = js.document.getElementById("fix_dv_input").value
-    strohm = get_float_list("strohm_params")
-    x0 = strohm[0] if len(strohm) > 0 else 0
-    sigma = strohm[1] if len(strohm) > 1 else 0
-    
-    scale_el = js.document.querySelector('input[name="xscale"]:checked')
-    scale = int(scale_el.value) if scale_el else 1
+    # Strohm 参数 (x0, sigma)
+    strohm_str = js.document.getElementById("strohm_params").value
+    strohm_list = parse_float_list(strohm_str)
+    x0 = strohm_list[0] if len(strohm_list) > 0 else 0
+    sigma = strohm_list[1] if len(strohm_list) > 1 else 0
+
+    log(f"Fitting with {fit_func}...")
 
     try:
         Fitting(
-            filename_ext, export_filename, "fit_res.txt", 
-            xl, xr, exclude, [el], func, 
-            scale, 0, 'max', init, fix_dv, x0, sigma, 
-            "DiffPy", "2.0"
+            filename_ext, export_filename, fitresults_filename, 
+            xfit_l, xfit_r, exclude, Fit_data, fit_func, 
+            scale, xl, xr, init_param, fix_Dv, x0, sigma, 
+            "DiffPy Web", "2.0"
         )
-        log("Fit Complete.")
+        log("Fitting Complete.")
     except Exception as e:
-        log(f"Fit Error: {e}", "error")
+        log(f"Fit Error: {e}")
         import traceback
         traceback.print_exc()
+    # Fitting(...) 运行成功后，把结果文件内容显示并缓存
+    try:
+        with open(fitresults_filename, "r") as f:
+            txt = f.read()
+        _set_fit_cache(txt)
+    except Exception as e:
+        log(f"Cache Error: {e}")
+        
+            
 
 # ==========================================
-# 绑定事件
+# 5. 手动绑定按钮 (必须保留)
 # ==========================================
-print("--- System Ready ---")
+print("--- Python System Check: Alive ---") 
+
+from pyodide.ffi import create_proxy
+import asyncio
 
 def manual_load_click(event):
-    global is_data_ready
-    is_data_ready = False # 新文件需重新计算
+    # 每次加载新文件，重置计算状态
+    global is_data_calculated
+    is_data_calculated = False 
     asyncio.ensure_future(load_file_to_vfs(event))
 
-# 绑定所有按钮
-btn_load = js.document.getElementById("btn_load")
+# 绑定加载按钮
+btn_obj = js.document.getElementById("btn_load")
+if btn_obj:
+    click_proxy = create_proxy(manual_load_click)
+    btn_obj.addEventListener("click", click_proxy)
+
+# 绑定 Plot 和 Fit 按钮 (直接使用 js.document 获取)
 btn_plot = js.document.getElementById("btn_plot")
 btn_fit = js.document.getElementById("btn_fit")
 
-if btn_load: btn_load.addEventListener("click", create_proxy(manual_load_click))
 if btn_plot: btn_plot.addEventListener("click", create_proxy(run_plot))
 if btn_fit:  btn_fit.addEventListener("click", create_proxy(run_fit))
 
 
+
+_load_fit_cache_on_start()
+
 </py-script>
 </body>
 </html>
-
-
-
-
-
-
