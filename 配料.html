@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>合金配料计算器</title>
+    <style>
+        :root { --color-background: #fcfcf9; --color-surface: #fffffd; --color-text: #134252; --color-text-secondary: #626c71; --color-primary: #21808d; --color-primary-hover: #1d7480; --color-border: rgba(94, 82, 64, 0.2); --color-secondary: rgba(94, 82, 64, 0.12); }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif; background: var(--color-background); color: var(--color-text); padding: 20px; line-height: 1.6; }
+        .container { max-width: 1400px; margin: 0 auto; display: flex; gap: 20px; }
+        .main-content { flex: 1; min-width: 0; }
+        .sidebar { width: 350px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 20px; max-height: calc(100vh - 40px); overflow-y: auto; position: sticky; top: 20px; display: none; }
+        .sidebar.active { display: block; }
+        h1 { color: var(--color-text); margin-bottom: 24px; font-size: 28px; display: flex; align-items: center; justify-content: space-between; }
+        .card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 500; color: var(--color-text); font-size: 14px; }
+        input, select { width: 100%; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 14px; background: var(--color-background); color: var(--color-text); transition: border-color 0.2s; }
+        input:focus, select:focus { outline: none; border-color: var(--color-primary); }
+        .btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background: var(--color-primary); color: white; width: 100%; padding: 12px; }
+        .btn-primary:hover { background: var(--color-primary-hover); }
+        .btn-secondary { background: var(--color-secondary); color: var(--color-text); margin-right: 10px; }
+        .btn-secondary:hover { background: rgba(94, 82, 64, 0.2); }
+        .btn-small { padding: 6px 12px; font-size: 13px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid var(--color-border); }
+        th { background: var(--color-secondary); font-weight: 600; font-size: 13px; }
+        td { font-size: 14px; }
+        .result-value { font-size: 18px; font-weight: 600; color: var(--color-primary); margin-top: 8px; }
+        .intermediate-alloys { margin-top: 20px; border-top: 1px solid var(--color-border); padding-top: 20px; }
+        .alloy-entry { display: flex; gap: 10px; margin-bottom: 15px; align-items: flex-end; }
+        .alloy-entry > div { flex: 1; }
+        .alloy-entry .btn { flex-shrink: 0; }
+        .toggle-group { display: flex; gap: 0; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+        .toggle-btn { flex: 1; padding: 10px 20px; border: none; background: var(--color-background); color: var(--color-text); cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+        .toggle-btn.active { background: var(--color-primary); color: white; }
+        .toggle-btn:not(:last-child) { border-right: 1px solid var(--color-border); }
+        .toggle-btn:hover:not(.active) { background: var(--color-secondary); }
+        .error-message { background: #fee; color: #c00; padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 14px; }
+        .success-message { background: #efe; color: #060; padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 14px; }
+        .db-table { font-size: 12px; }
+        .db-table th, .db-table td { padding: 6px 8px; }
+        @media (max-width: 1200px) { .container { flex-direction: column; } .sidebar { width: 100%; position: static; max-height: none; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="main-content">
+            <h1>
+                🧪 合金配料计算器
+                <button class="btn btn-secondary btn-small" onclick="window.toggleSidebar()">
+                    📊 显示/隐藏数据库
+                </button>
+            </h1>
+
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h3 style="margin: 0;">目标合金配比</h3>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <label for="totalMass" style="margin: 0; white-space: nowrap; font-size: 13px;">总质量(g)</label>
+                            <input type="number" id="totalMass" value="10" step="0.1" style="width: 70px; padding: 6px 8px;">
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <label for="diameter" style="margin: 0; white-space: nowrap; font-size: 13px;">直径(mm)</label>
+                            <input type="number" id="diameter" value="10" step="0.1" style="width: 70px; padding: 6px 8px;">
+                        </div>
+                        <button class="btn btn-secondary btn-small" id="mainModeBtn" style="margin: 0;">原子比</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="elements">元素 (逗号分隔)</label>
+                    <input type="text" id="elements" placeholder="例如: Al,Co,Cr,Fe,Ni">
+                </div>
+
+                <div class="form-group">
+                    <label for="ratios" id="ratioLabel">原子比 (逗号分隔)</label>
+                    <input type="text" id="ratios" placeholder="例如: 1,1,1,1,2.1">
+                </div>
+
+                <div class="intermediate-alloys">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h3 style="margin: 0;">中间合金 (可选)</h3>
+                        <button class="btn btn-secondary btn-small" id="alloyModeBtn" style="margin: 0;">原子比</button>
+                    </div>
+                    
+                    <div id="alloyInputs">
+                        <div class="alloy-entry">
+                            <div>
+                                <input type="text" placeholder="元素 (逗号分隔, 例如: Nb,Al)" class="alloy-elements" style="margin-bottom: 8px;">
+                                <input type="text" placeholder="原子比 (逗号分隔, 例如: 30,70)" class="alloy-ratios">
+                            </div>
+                            <button class="btn btn-secondary btn-small" onclick="window.addAlloyInput()">+ 添加</button>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="window.calculate()" style="margin-top: 20px;">计算配料</button>
+            </div>
+
+            <div id="results"></div>
+        </div>
+
+        <div class="sidebar" id="sidebar">
+            <h3 style="margin-bottom: 16px;">元素数据库</h3>
+            <div id="databaseContent"></div>
+        </div>
+    </div>
+
+    <script>
+        const state = { mainInputMode: 'atomic', alloyInputMode: 'atomic' };
+        const elementDatabase = `Element,Atomic_Mass,Density_g_cm3,Melting_Point_C,Valence_Electrons,Electronegativity,Atomic_Radius_pm,Crystal_Structure
+H,1.008,0.0899,-259.14,1s1,2.2,37,gas
+He,4.003,0.179,-272.2,1s2,,32,gas
+Li,6.941,0.534,180.5,2s1,0.98,152,bcc
+Be,9.012,1.847,1287.0,2s2,1.57,112,hcp
+B,10.81,2.35,2075.0,2s2 2p1,2.04,85,rhombo
+C,12.01,3.514,3550.0,2s2 2p2,2.55,77,hcp
+N,14.007,1.251,-210.0,2s2 2p3,3.04,71,hcp
+O,16.0,1.429,-218.4,2s2 2p4,3.44,66,gas
+F,19.0,1.696,-219.6,2s2 2p5,3.98,64,gas
+Ne,20.18,0.9,-248.6,2s2 2p6,,67,fcc
+Na,22.99,0.971,97.8,3s1,0.93,186,bcc
+Mg,24.31,1.738,650.0,3s2,1.31,160,hcp
+Al,26.982,2.7,660.3,3s2 3p1,1.61,143,fcc
+Si,28.09,2.33,1414.0,3s2 3p2,1.9,118,diamond
+P,30.97,1.823,44.15,3s2 3p3,2.19,110,ortho
+S,32.07,2.07,115.2,3s2 3p4,2.58,104,ortho
+Cl,35.45,3.214,-101.5,3s2 3p5,3.16,99,ortho
+Ar,39.95,1.784,-189.3,3s2 3p6,,97,fcc
+K,39.1,0.862,63.5,4s1,0.82,227,bcc
+Ca,40.08,1.55,842.0,4s2,1.0,197,fcc
+Sc,44.96,2.989,1541.0,3d1 4s2,1.36,162,hcp
+Ti,47.867,4.506,1668.0,3d2 4s2,1.54,147,hcp
+V,50.942,6.11,1910.0,3d3 4s2,1.63,134,bcc
+Cr,51.996,7.19,1907.0,3d5 4s1,1.66,128,bcc
+Mn,54.938,7.47,1246.0,3d5 4s2,1.55,127,cubic
+Fe,55.845,7.874,1538.0,3d6 4s2,1.83,126,bcc
+Co,58.933,8.9,1495.0,3d7 4s2,1.88,125,hcp
+Ni,58.693,8.908,1455.0,3d8 4s2,1.91,124,fcc
+Cu,63.546,8.96,1084.6,3d10 4s1,1.9,128,fcc
+Zn,65.38,7.134,419.5,3d10 4s2,1.65,134,hcp
+Ga,69.723,5.904,29.76,4s2 4p1,1.81,135,ortho
+Ge,72.63,5.323,938.3,4s2 4p2,2.01,122,diamond
+As,74.922,5.727,817.0,4s2 4p3,2.18,121,rhombo
+Se,78.96,4.809,221.0,4s2 4p4,2.55,119,hex
+Br,79.904,3.123,-7.2,4s2 4p5,2.96,114,ortho
+Kr,83.798,3.749,-157.4,4s2 4p6,3.0,110,fcc
+Rb,85.468,1.532,39.3,5s1,0.82,248,bcc
+Sr,87.62,2.64,777.0,5s2,0.95,215,fcc
+Y,88.906,4.469,1522.0,4d1 5s2,1.22,180,hcp
+Zr,91.224,6.505,1855.0,4d2 5s2,1.33,160,hcp
+Nb,92.906,8.57,2477.0,4d4 5s1,1.6,146,bcc
+Mo,95.95,10.28,2623.0,4d5 5s1,2.16,139,bcc
+Tc,98.0,11.5,2157.0,4d5 5s2,1.9,136,hcp
+Ru,101.07,12.37,2334.0,4d7 5s1,2.2,134,hcp
+Rh,102.91,12.41,1964.0,4d8 5s1,2.28,134,fcc
+Pd,106.42,12.02,1554.9,4d10,2.2,137,fcc
+Ag,107.87,10.49,961.8,4d10 5s1,1.93,144,fcc
+Cd,112.41,8.65,321.1,4d10 5s2,1.69,151,hcp
+In,114.82,7.31,156.6,5s2 5p1,1.78,167,tetra
+Sn,118.71,7.287,231.9,5s2 5p2,1.96,158,tetra
+Sb,121.76,6.697,630.6,5s2 5p3,2.05,161,rhombo
+Te,127.6,6.24,449.5,5s2 5p4,2.1,143,hex
+I,126.9,4.933,113.7,5s2 5p5,2.66,133,ortho
+Xe,131.29,5.894,-111.8,5s2 5p6,2.6,131,fcc
+Cs,132.91,1.873,28.4,6s1,0.79,265,bcc
+Ba,137.33,3.51,727.0,6s2,0.89,222,bcc
+La,138.91,6.146,920.0,5d1 6s2,1.1,187,dhcp
+Ce,140.12,6.77,798.0,4f1 5d1 6s2,1.12,181,fcc
+Pr,140.91,6.77,931.0,4f3 6s2,1.13,182,dhcp
+Nd,144.24,7.01,1016.0,4f4 6s2,1.14,181,dhcp
+Pm,145.0,7.26,1042.0,4f5 6s2,1.13,183,dhcp
+Sm,150.36,7.52,1072.0,4f6 6s2,1.17,180,rhombo
+Eu,151.96,5.244,822.0,4f7 6s2,1.2,180,bcc
+Gd,157.25,7.9,1313.0,4f7 5d1 6s2,1.2,180,hcp
+Tb,158.93,8.23,1356.0,4f9 6s2,1.1,177,hcp
+Dy,162.5,8.54,1412.0,4f10 6s2,1.22,178,hcp
+Ho,164.93,8.79,1474.0,4f11 6s2,1.23,176,hcp
+Er,167.26,9.066,1529.0,4f12 6s2,1.24,176,hcp
+Tm,168.93,9.32,1545.0,4f13 6s2,1.25,176,hcp
+Yb,173.05,6.9,824.0,4f14 6s2,1.1,176,fcc
+Lu,174.97,9.841,1663.0,4f14 5d1 6s2,1.27,174,hcp
+Hf,178.49,13.281,2233.0,4f14 5d2 6s2,1.3,159,hcp
+Ta,180.95,16.65,3017.0,5d3 6s2,1.5,146,bcc
+W,183.84,19.25,3422.0,5d4 6s2,2.36,139,bcc
+Re,186.21,21.02,3186.0,5d5 6s2,1.9,137,hcp
+Os,190.23,22.59,3033.0,5d6 6s2,2.2,135,hcp
+Ir,192.22,22.56,2446.0,5d7 6s2,2.2,136,fcc
+Pt,195.08,21.45,1768.3,5d9 6s1,2.28,139,fcc
+Au,196.97,19.32,1064.2,5d10 6s1,2.54,144,fcc
+Hg,200.59,13.534,-38.8,5d10 6s2,2.0,151,rhombo
+Tl,204.38,11.85,304.0,6s2 6p1,1.62,170,hcp
+Pb,207.2,11.34,327.5,6s2 6p2,2.33,175,fcc
+Bi,208.98,9.78,271.4,6s2 6p3,2.02,156,rhombo
+Th,232.04,11.724,1750.0,6d2 7s2,1.3,180,fcc
+U,238.03,19.05,1135.0,5f3 6d1 7s2,1.38,156,ortho`;
+
+        function parseCSV(csv) {
+            const lines = csv.trim().split('\n');
+            const headers = lines[0].split(',');
+            const data = [];
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',');
+                const row = {};
+                headers.forEach((header, index) => {
+                    row[header] = values[index];
+                });
+                data.push(row);
+            }
+            return { headers, data };
+        }
+
+        function getElementData(symbol) {
+            const { data } = parseCSV(elementDatabase);
+            const element = data.find(e => e.Element === symbol);
+            if (!element) return null;
+            return {
+                symbol: symbol,
+                atomicMass: parseFloat(element.Atomic_Mass),
+                density: parseFloat(element.Density_g_cm3)
+            };
+        }
+
+        window.toggleSidebar = function() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('active');
+            if (sidebar.classList.contains('active') && !document.getElementById('databaseContent').innerHTML) {
+                loadDatabase();
+            }
+        };
+
+        function loadDatabase() {
+            const { headers, data } = parseCSV(elementDatabase);
+            let html = '<table class="db-table"><thead><tr>';
+            headers.forEach(h => html += `<th>${h}</th>`);
+            html += '</tr></thead><tbody>';
+            data.forEach(row => {
+                html += '<tr>';
+                headers.forEach(h => html += `<td>${row[h] || ''}</td>`);
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            document.getElementById('databaseContent').innerHTML = html;
+        }
+
+        window.addAlloyInput = function() {
+            const container = document.getElementById('alloyInputs');
+            const newEntry = document.createElement('div');
+            newEntry.className = 'alloy-entry';
+            let placeholder = '例如: 30,70';
+            if (state.alloyInputMode === 'mass') placeholder = '例如: 2787.18,1888.74';
+            else if (state.alloyInputMode === 'simplified') placeholder = '例如: 30,70';
+            newEntry.innerHTML = `<div><input type="text" placeholder="元素 (例如: Nb,Al)" class="alloy-elements" style="margin-bottom: 8px;"><input type="text" placeholder="${placeholder}" class="alloy-ratios"></div><button class="btn btn-secondary btn-small" onclick="this.parentElement.remove()">- 删除</button>`;
+            container.appendChild(newEntry);
+        };
+
+        // ================= 核心计算逻辑 (贪心算法) =================
+        window.calculate = function() {
+            const elementsInput = document.getElementById('elements').value.trim();
+            const ratiosInput = document.getElementById('ratios').value.trim();
+            const totalMass = parseFloat(document.getElementById('totalMass').value);
+            const diameter = parseFloat(document.getElementById('diameter').value);
+
+            if (!elementsInput || !ratiosInput) return showError('请输入元素和配比。');
+
+            const elements = elementsInput.split(',').map(e => e.trim());
+            let ratios = ratiosInput.split(',').map(r => parseFloat(r.trim()));
+
+            if (elements.length !== ratios.length) return showError('元素数量和配比数量不匹配。');
+
+            // 1. 归一化目标配比
+            let atomicRatios = [...ratios];
+            if (state.mainInputMode === 'mass') {
+                const elementData = elements.map(e => getElementData(e));
+                if (elementData.some(e => !e)) return showError('数据库中未找到某些元素。');
+                atomicRatios = ratios.map((mass, i) => mass / elementData[i].atomicMass);
+            }
+            const originalSum = atomicRatios.reduce((a, b) => a + b, 0);
+            atomicRatios = atomicRatios.map(r => r / originalSum); // 归一化
+
+            // 建立目标需求表: { Ni: 0.4, P: 0.2 ... }
+            const targetNeed = {};
+            elements.forEach((e, i) => targetNeed[e] = atomicRatios[i]);
+
+            // 2. 解析中间合金
+            const intermediateAlloys = [];
+            document.querySelectorAll('.alloy-entry').forEach(entry => {
+                const elemInput = entry.querySelector('.alloy-elements');
+                const ratioInput = entry.querySelector('.alloy-ratios');
+                if (elemInput && ratioInput && elemInput.value.trim()) {
+                    const alloyElems = elemInput.value.split(',').map(e => e.trim());
+                    const alloyRatiosStr = ratioInput.value.split(',').map(r => parseFloat(r.trim()));
+                    
+                    // 归一化合金成分
+                    let alloyAtomic = [...alloyRatiosStr];
+                    if (state.alloyInputMode === 'mass') {
+                        const ad = alloyElems.map(e => getElementData(e));
+                        if (ad.every(x => x)) alloyAtomic = alloyRatiosStr.map((m, i) => m / ad[i].atomicMass);
+                    }
+                    const sum = alloyAtomic.reduce((a,b) => a+b, 0);
+                    const comp = {};
+                    alloyElems.forEach((e, i) => comp[e] = alloyAtomic[i] / sum);
+                    
+                    intermediateAlloys.push({
+                        name: alloyElems.map((e, i) => `${e}${(alloyAtomic[i]/sum*100).toFixed(0)}`).join(''),
+                        elements: alloyElems,
+                        composition: comp
+                    });
+                }
+            });
+
+            try {
+                // 3. 贪心填充策略
+                const currentFill = {}; 
+                elements.forEach(e => currentFill[e] = 0);
+                const finalAmounts = {};
+
+                // A. 优先使用中间合金
+                intermediateAlloys.forEach(alloy => {
+                    // 计算该合金的最大允许添加量（受限于任意一种元素的剩余需求）
+                    let maxAmount = Infinity;
+                    
+                    alloy.elements.forEach(elem => {
+                        if (targetNeed[elem] !== undefined) {
+                            const remainingNeed = targetNeed[elem] - currentFill[elem];
+                            if (alloy.composition[elem] > 0) {
+                                const allowed = remainingNeed / alloy.composition[elem];
+                                if (allowed < maxAmount) maxAmount = allowed;
+                            }
+                        }
+                    });
+
+                    if (maxAmount === Infinity) maxAmount = 0;
+                    if (maxAmount < 0) maxAmount = 0;
+
+                    if (maxAmount > 0) {
+                        finalAmounts[alloy.name] = maxAmount;
+                        // 更新当前填充状态
+                        alloy.elements.forEach(elem => {
+                            if (currentFill[elem] !== undefined) {
+                                currentFill[elem] += maxAmount * alloy.composition[elem];
+                            }
+                        });
+                    }
+                });
+
+                // B. 用纯元素补足剩余需求
+                elements.forEach(elem => {
+                    const remaining = targetNeed[elem] - currentFill[elem];
+                    if (remaining > 1e-7) { // 容差
+                        finalAmounts[elem] = remaining;
+                    }
+                });
+
+                // 4. 计算并显示结果
+                displayResults(calculateProperties(elements, atomicRatios, totalMass, diameter, finalAmounts, intermediateAlloys, originalSum));
+
+            } catch (e) {
+                showError(e.message);
+            }
+        };
+
+        function calculateProperties(elements, targetAtomicRatios, totalMass, diameter, amounts, intermediateAlloys, originalSum) {
+            const elementData = {};
+            elements.forEach(e => {
+                const d = getElementData(e);
+                if (d) elementData[e] = d;
+            });
+
+            // 计算目标合金的理论性质
+            let avgAtomicMass = 0;
+            let avgDensity = 0;
+            elements.forEach((e, i) => {
+                avgAtomicMass += targetAtomicRatios[i] * elementData[e].atomicMass;
+                avgDensity += targetAtomicRatios[i] * elementData[e].density;
+            });
+
+            const volume = totalMass / avgDensity;
+            const height = (4 * volume) / (Math.PI * Math.pow(diameter / 10, 2));
+
+            return {
+                avgAtomicMass, avgDensity, volume, height, diameter, totalMass,
+                amounts, intermediateAlloys, elementData, originalSum,
+                isValidRatio: Math.abs(originalSum - 100) < 0.1
+            };
+        }
+
+        function displayResults(r) {
+            let html = '';
+            if (!r.isValidRatio) html += `<div class="error-message">⚠️ 原子比总和为 ${r.originalSum.toFixed(2)}, 建议为 100.00</div>`;
+            else html += `<div class="success-message">✓ 原子比总和为 ${r.originalSum.toFixed(2)}, 配比正确</div>`;
+
+            html += `<div class="card"><h2 style="margin-bottom: 20px;">计算结果</h2>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+                        <div class="form-group" style="margin: 0;"><label>平均原子量</label><div class="result-value">${r.avgAtomicMass.toFixed(3)} g/mol</div></div>
+                        <div class="form-group" style="margin: 0;"><label>理论密度</label><div class="result-value">${r.avgDensity.toFixed(3)} g/cm³</div></div>
+                        <div class="form-group" style="margin: 0;"><label>理论体积</label><div class="result-value">${r.volume.toFixed(3)} cm³</div></div>
+                    </div></div>
+                    <div class="card"><h3>配料表</h3><table><thead><tr><th>材料</th><th>原子比例</th><th>质量 (g)</th></tr></thead><tbody>`;
+            
+            for (let name in r.amounts) {
+                const mol = r.amounts[name];
+                const isAlloy = r.intermediateAlloys.some(a => a.name === name);
+                let mass = 0;
+
+                if (isAlloy) {
+                    const alloy = r.intermediateAlloys.find(a => a.name === name);
+                    let alloyMolarMass = 0;
+                    for(let e in alloy.composition) alloyMolarMass += alloy.composition[e] * r.elementData[e].atomicMass;
+                    mass = (mol * alloyMolarMass / r.avgAtomicMass) * r.totalMass;
+                } else {
+                    // 纯元素
+                    const molarMass = r.elementData[name].atomicMass;
+                    mass = (mol * molarMass / r.avgAtomicMass) * r.totalMass;
+                }
+
+                html += `<tr><td><strong>${name}</strong> ${isAlloy?'(中间合金)':'(纯元素)'}</td><td>${mol.toFixed(4)}</td><td>${mass.toFixed(4)}</td></tr>`;
+            }
+            
+            html += `</tbody></table></div>
+                    <div class="card"><h3>铸锭尺寸</h3><p>直径: <strong>${r.diameter.toFixed(2)} mm</strong></p><p>高度: <strong>${r.height.toFixed(2)} mm</strong></p></div>`;
+            
+            document.getElementById('results').innerHTML = html;
+        }
+
+        function showError(msg) { document.getElementById('results').innerHTML = `<div class="error-message">${msg}</div>`; }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            const modes = ['atomic', 'mass', 'simplified'];
+            const labels = { 'atomic': '原子比', 'mass': '质量比', 'simplified': '简化比' };
+            
+            const updateMode = (btnId, stateKey, inputClass, labelId) => {
+                const btn = document.getElementById(btnId);
+                const idx = modes.indexOf(state[stateKey]);
+                const next = modes[(idx + 1) % 3];
+                state[stateKey] = next;
+                btn.textContent = labels[next];
+                
+                let ph = '例如: 1,1,1';
+                if (next === 'mass') ph = '例如: 50.5, 40.2';
+                
+                if (labelId) {
+                    document.getElementById(labelId).textContent = labels[next];
+                    document.getElementById('ratios').placeholder = ph;
+                } else {
+                    document.querySelectorAll('.' + inputClass).forEach(el => el.placeholder = ph);
+                }
+            };
+
+            document.getElementById('mainModeBtn').addEventListener('click', () => updateMode('mainModeBtn', 'mainInputMode', null, 'ratioLabel'));
+            document.getElementById('alloyModeBtn').addEventListener('click', () => updateMode('alloyModeBtn', 'alloyInputMode', 'alloy-ratios', null));
+        });
+    </script>
+</body>
+</html>
