@@ -1,0 +1,2724 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>文献引用图谱</title>
+<style>
+:root {
+  --bg:#0f1117; --panel:#161924; --panel2:#1e2235;
+  --border:#2a2d3e; --accent:#4f6ef7; --green:#10b981;
+  --gold:#f59e0b; --red:#ef4444; --purple:#8b5cf6;
+  --text:#e2e8f0; --text2:#7c8db5; --text3:#4a5578;
+  --row-hover:rgba(79,110,247,.07); --row-sel:rgba(79,110,247,.15);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+#topbar{height:46px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:8px;flex-shrink:0;}
+#topbar h1{font-size:14px;font-weight:700;white-space:nowrap;}
+.sep{width:1px;height:20px;background:var(--border);flex-shrink:0;}
+.tbtn{padding:5px 11px;font-size:11px;font-weight:600;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text2);cursor:pointer;transition:all .15s;white-space:nowrap;}
+.tbtn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
+.tbtn:disabled{opacity:.35;cursor:not-allowed;pointer-events:none;}
+.tbtn.green{border-color:var(--green);color:var(--green);}.tbtn.green:hover{background:var(--green);color:#fff;}
+.tbtn.gold{border-color:var(--gold);color:var(--gold);}.tbtn.gold:hover{background:var(--gold);color:#fff;}
+#status-area{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0;}
+#status-txt{font-size:11px;color:var(--text2);max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#prog-wrap{display:none;align-items:center;gap:6px;}
+#prog-wrap.show{display:flex;}
+#prog-bar{width:100px;height:4px;background:var(--border);border-radius:2px;}
+#prog-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .2s;width:0%;}
+#prog-txt{font-size:10px;color:var(--text2);min-width:40px;}
+#main{flex:1;display:flex;overflow:hidden;}
+#left{width:440px;min-width:240px;display:flex;flex-direction:column;border-right:1px solid var(--border);background:var(--panel);}
+#tbar{padding:8px 10px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px;flex-shrink:0;}
+#srch{width:100%;padding:6px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text);outline:none;}
+#srch:focus{border-color:var(--accent);}
+#chip-wrap{display:flex;flex-wrap:wrap;gap:4px;max-height:52px;overflow-y:auto;}
+.chip{padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600;background:var(--panel2);color:var(--text2);border:1px solid var(--border);cursor:pointer;transition:all .15s;}
+.chip.on{background:rgba(79,110,247,.2);color:var(--accent);border-color:var(--accent);}
+#frow{display:flex;align-items:center;gap:6px;}
+#selcount{font-size:11px;color:var(--text2);}
+.smbtn{padding:3px 7px;font-size:10px;font-weight:600;border:1px solid var(--border);border-radius:5px;background:transparent;color:var(--text2);cursor:pointer;}
+.smbtn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
+#twrap{flex:1;overflow-y:auto;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead{position:sticky;top:0;z-index:5;}
+thead th{background:var(--panel2);padding:7px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);cursor:pointer;white-space:nowrap;user-select:none;}
+thead th:hover{color:var(--text);}
+.si{opacity:.4;font-size:9px;margin-left:2px;}
+th.asc .si::after{content:'▲';}th.desc .si::after{content:'▼';}
+tbody tr{border-bottom:1px solid rgba(255,255,255,.03);cursor:pointer;transition:background .1s;}
+tbody tr:hover{background:var(--row-hover);}tbody tr.sel{background:var(--row-sel);}
+tbody tr.onc td:first-child{border-left:2px solid var(--green);}
+td{padding:6px 8px;vertical-align:middle;max-width:0;}
+td.tc{width:28px;text-align:center;max-width:28px;}
+.ct{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;}
+.ttl{font-weight:600;color:var(--text);}
+.tpill{display:inline-block;padding:1px 5px;border-radius:10px;font-size:9px;font-weight:700;background:rgba(79,110,247,.15);color:var(--accent);margin-right:2px;}
+.cb{width:14px;height:14px;border-radius:4px;border:1.5px solid var(--border);background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:9px;transition:all .15s;}
+.cb.ck{background:var(--accent);border-color:var(--accent);color:#fff;}
+.gdot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:4px;vertical-align:middle;flex-shrink:0;}
+#right{flex:1;position:relative;overflow:hidden;}
+#cbg{position:absolute;inset:0;background-image:radial-gradient(circle,#1c2033 1px,transparent 1px);background-size:26px 26px;pointer-events:none;}
+#gc{position:absolute;inset:0;width:100%;height:100%;}
+#chint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--text3);pointer-events:none;font-size:14px;line-height:2.4;}
+#ctb{position:absolute;top:12px;left:50%;transform:translateX(-50%);display:flex;gap:6px;background:var(--panel);border:1px solid var(--border);border-radius:30px;padding:5px 12px;z-index:10;box-shadow:0 4px 20px rgba(0,0,0,.4);}
+.ctbtn{padding:4px 10px;font-size:11px;font-weight:600;border:1px solid var(--border);border-radius:20px;background:transparent;color:var(--text2);cursor:pointer;transition:all .15s;}
+.ctbtn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
+#zlbl{font-size:11px;color:var(--text2);padding:4px 2px;}
+#unsaved{position:absolute;top:10px;right:10px;background:var(--gold);color:#000;font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;display:none;z-index:15;}
+#unsaved.show{display:block;}
+#legend{position:absolute;bottom:16px;left:14px;background:rgba(22,25,36,.88);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:10px;color:var(--text2);display:flex;flex-direction:column;gap:5px;z-index:10;}
+.leg-row{display:flex;align-items:center;gap:7px;}
+.leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+#tip{position:absolute;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 13px;font-size:12px;color:var(--text);max-width:260px;pointer-events:none;z-index:100;opacity:0;transition:opacity .15s;line-height:1.7;box-shadow:0 8px 24px rgba(0,0,0,.5);}
+#tip.show{opacity:1;}#tip b{color:var(--accent);}
+/* DETAIL */
+#det{position:absolute;top:0;right:0;width:320px;height:100%;background:var(--panel);border-left:1px solid var(--border);transform:translateX(100%);transition:transform .25s;z-index:20;display:flex;flex-direction:column;}
+#det.open{transform:translateX(0);}
+#det-x{position:absolute;top:10px;right:10px;width:24px;height:24px;border-radius:50%;border:none;background:var(--panel2);cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;justify-content:center;z-index:2;}
+#det-head{padding:14px 14px 0;flex-shrink:0;}
+#det-head h3{font-size:13px;font-weight:700;line-height:1.5;padding-right:28px;margin-bottom:8px;}
+.dr{display:flex;gap:6px;margin-bottom:4px;align-items:baseline;}
+.dl{font-size:10px;color:var(--text2);font-weight:700;text-transform:uppercase;min-width:44px;flex-shrink:0;}
+.dv{font-size:12px;color:var(--text);}
+.dtags{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 2px;align-items:center;}
+.dtag{padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;background:rgba(79,110,247,.15);color:var(--accent);display:inline-flex;align-items:center;gap:4px;}
+.dtag-x{cursor:pointer;opacity:.6;font-size:10px;line-height:1;}.dtag-x:hover{opacity:1;color:var(--red);}
+.tag-add-wrap{display:inline-flex;align-items:center;gap:3px;}
+.tag-add-inp{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:1px 6px;font-size:10px;color:var(--text);width:80px;outline:none;}
+.tag-add-inp:focus{border-color:var(--accent);}
+#det-canvas-btns{padding:8px 14px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px;flex-shrink:0;}
+#det-canvas-btns .row{display:flex;gap:6px;}
+.det-btn{flex:1;padding:7px 6px;font-size:11px;font-weight:700;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text2);cursor:pointer;transition:all .15s;text-align:center;}
+.det-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
+.det-btn.green{border-color:var(--green);color:var(--green);}.det-btn.green:hover{background:var(--green);color:#fff;}
+.det-btn.gold{border-color:var(--gold);color:var(--gold);}.det-btn.gold:hover{background:var(--gold);color:#fff;}
+.det-btn.red{border-color:var(--red);color:var(--red);}.det-btn.red:hover{background:var(--red);color:#fff;}
+.det-btn.purple{border-color:var(--purple);color:var(--purple);}.det-btn.purple:hover{background:var(--purple);color:#fff;}
+#det-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
+.dtab{flex:1;padding:8px 4px;font-size:11px;font-weight:700;text-align:center;cursor:pointer;color:var(--text2);border-bottom:2px solid transparent;transition:all .15s;}
+.dtab.act{color:var(--accent);border-bottom-color:var(--accent);}
+#det-body{flex:1;overflow-y:auto;padding:8px 10px 14px;}
+.nb{padding:8px 9px;border-radius:6px;background:var(--panel2);margin-bottom:5px;cursor:pointer;font-size:11px;border-left:3px solid transparent;transition:background .1s;line-height:1.5;}
+.nb:hover{background:rgba(79,110,247,.12);}
+.nb.lib{border-left-color:var(--green);background:rgba(16,185,129,.05);}
+.nb.oncanvas{border-left-color:var(--accent);}
+.nb-sub{font-size:10px;color:var(--text2);margin-top:2px;}
+.nb-cite{font-size:10px;color:var(--text2);margin-top:3px;}
+.nbadge{display:inline-block;padding:1px 5px;border-radius:10px;font-size:9px;font-weight:700;margin-right:3px;}
+.nbadge.lib{background:rgba(16,185,129,.2);color:var(--green);}
+.nbadge.onc{background:rgba(79,110,247,.2);color:var(--accent);}
+.empty-msg{color:var(--text2);font-size:12px;text-align:center;padding:24px 0;line-height:1.8;}
+.fetch-btn{width:100%;padding:8px;margin-top:4px;font-size:11px;font-weight:700;border:1px solid var(--accent);border-radius:6px;background:transparent;color:var(--accent);cursor:pointer;transition:all .15s;}
+.fetch-btn:hover{background:var(--accent);color:#fff;}
+/* NOTE EDITOR */
+.note-editor-wrap{margin-top:4px;}
+.note-item{background:var(--panel2);border-radius:6px;margin-bottom:6px;overflow:hidden;border:1px solid var(--border);}
+.note-header{display:flex;align-items:center;padding:5px 8px;gap:6px;border-bottom:1px solid var(--border);}
+.note-idx{font-size:9px;color:var(--text2);font-weight:700;}
+.note-del{margin-left:auto;background:none;border:none;color:var(--text2);cursor:pointer;font-size:11px;padding:1px 4px;border-radius:3px;}
+.note-del:hover{background:var(--red);color:#fff;}
+.note-ta{width:100%;min-height:70px;background:transparent;border:none;color:var(--text);font-size:11px;padding:7px 9px;resize:vertical;font-family:inherit;line-height:1.6;outline:none;}
+.note-ta:focus{background:rgba(79,110,247,.04);}
+.add-note-btn{width:100%;padding:7px;font-size:11px;font-weight:700;border:1px dashed var(--border);border-radius:6px;background:transparent;color:var(--text2);cursor:pointer;transition:all .15s;margin-top:2px;}
+.add-note-btn:hover{border-color:var(--accent);color:var(--accent);}
+.save-note-btn{width:100%;padding:6px;font-size:11px;font-weight:700;border:1px solid var(--green);border-radius:6px;background:transparent;color:var(--green);cursor:pointer;transition:all .15s;margin-top:6px;}
+.save-note-btn:hover{background:var(--green);color:#fff;}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--border);color:var(--text);padding:8px 18px;border-radius:30px;font-size:12px;opacity:0;pointer-events:none;transition:opacity .3s;z-index:999;white-space:nowrap;}
+#toast.show{opacity:1;}
+
+
+/* ═══════════════════════ FM DETAIL OVERLAY ═══════════════════════ */
+#dp-overlay{position:fixed;inset:0;z-index:200;background:var(--bg);display:none;flex-direction:column;overflow:hidden;}
+#dp-overlay.show{display:flex;}
+#dp-nav{height:52px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:12px;flex-shrink:0;}
+#dp-nav-back{padding:5px 12px;font-size:12px;font-weight:700;border:1px solid var(--border);border-radius:20px;background:transparent;color:var(--text2);cursor:pointer;transition:all .15s;}
+#dp-nav-back:hover{background:var(--panel2);color:var(--text);}
+#dp-nav-title{font-size:14px;font-weight:700;color:var(--text);max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#dp-nav-subtitle{font-size:11px;color:var(--text2);}
+#dp-nav-right{margin-left:auto;display:flex;gap:8px;}
+.dp-nbtn{padding:6px 14px;font-size:12px;font-weight:700;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text2);cursor:pointer;transition:all .15s;}
+.dp-nbtn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
+.dp-nbtn.gold{border-color:var(--gold);color:var(--gold);}.dp-nbtn.gold:hover{background:var(--gold);color:#fff;}
+.dp-nbtn.green{border-color:var(--green);color:var(--green);}.dp-nbtn.green:hover{background:var(--green);color:#fff;}
+#dp-body{flex:1;display:flex;overflow:hidden;min-height:0;}
+#dp-sidebar{width:260px;flex-shrink:0;border-right:1px solid var(--border);overflow-y:auto;background:var(--panel);display:flex;flex-direction:column;}
+#dp-card-hdr{padding:20px 18px 14px;background:linear-gradient(160deg,#1a2040 0%,#0f1117 100%);border-bottom:1px solid var(--border);text-align:center;}
+#dp-card-avatar{width:64px;height:64px;border-radius:50%;background:var(--panel3);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 10px;}
+#dp-card-name{font-size:13px;font-weight:800;line-height:1.4;color:var(--text);margin-bottom:4px;}
+#dp-card-journal{font-size:11px;color:var(--accent);font-weight:600;margin-bottom:10px;}
+.dp-stat-row{display:flex;justify-content:space-around;margin-top:6px;}
+.dp-stat{text-align:center;}
+.dp-stat-val{font-size:18px;font-weight:800;color:var(--text);}
+.dp-stat-lbl{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.dp-sb-sec{padding:10px 14px;border-bottom:1px solid var(--border);}
+.dp-sb-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text2);margin-bottom:6px;display:flex;align-items:center;gap:5px;}
+.dp-meta-row{display:flex;gap:8px;margin-bottom:4px;align-items:baseline;}
+.dp-meta-key{font-size:10px;color:var(--text2);min-width:38px;font-weight:700;text-transform:uppercase;flex-shrink:0;}
+.dp-meta-val{font-size:11px;color:var(--text);word-break:break-all;}
+.dp-meta-val a{color:var(--accent);text-decoration:none;}
+.dp-tag-wrap{display:flex;flex-wrap:wrap;gap:4px;}
+.dp-stag{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;background:rgba(79,110,247,.13);color:var(--accent);border:1px solid rgba(79,110,247,.25);}
+.dp-stag .dp-tx{cursor:pointer;opacity:.5;font-size:9px;}.dp-stag .dp-tx:hover{opacity:1;color:var(--red);}
+.dp-tag-inp{background:transparent;border:1px dashed var(--border);border-radius:20px;padding:3px 8px;font-size:10px;color:var(--text);width:75px;outline:none;}
+.dp-tag-inp:focus{border-color:var(--accent);}
+.dp-club-badge{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;background:var(--panel3);margin-bottom:4px;border:1px solid transparent;transition:all .15s;}
+.dp-club-badge:hover{border-color:var(--border);}
+.dp-club-icon{width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;background:rgba(79,110,247,.15);}
+.dp-club-name{font-size:11px;font-weight:700;color:var(--text);}
+.dp-club-sub{font-size:9px;color:var(--text2);}
+.dp-club-del{margin-left:auto;background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;opacity:.5;}
+.dp-club-del:hover{opacity:1;color:var(--red);}
+.dp-add-club-btn{width:100%;padding:5px;font-size:10px;font-weight:700;border:1px dashed var(--border);border-radius:6px;background:transparent;color:var(--text2);cursor:pointer;transition:all .15s;margin-top:3px;}
+.dp-add-club-btn:hover{border-color:var(--accent);color:var(--accent);}
+#dp-mid{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px;min-height:0;}
+.dp-attr-block{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.dp-attr-block-hdr{padding:10px 14px;background:var(--panel2);display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);}
+.dp-attr-block-icon{font-size:15px;}
+.dp-attr-block-name{font-size:12px;font-weight:700;color:var(--text);}
+.dp-attr-block-cnt{font-size:10px;color:var(--text2);margin-left:auto;background:var(--panel3);padding:2px 7px;border-radius:20px;}
+.dp-attr-block-body{padding:10px 14px;display:flex;flex-direction:column;gap:7px;}
+.dp-sub-row{display:flex;align-items:center;gap:8px;padding:5px 9px;border-radius:6px;background:var(--panel2);border:1px solid transparent;transition:background .15s;}
+.dp-sub-row:hover{background:var(--panel3);border-color:var(--border);}
+.dp-sub-name{font-size:11px;color:var(--text2);min-width:110px;flex-shrink:0;}
+.dp-sub-val{font-size:12px;font-weight:700;color:var(--text);flex:1;}
+.dp-sub-val.empty{color:var(--text3);font-style:italic;font-weight:400;}
+.dp-sub-unit{font-size:10px;color:var(--text2);}
+.dp-rating-bar{flex:1;height:5px;background:var(--panel3);border-radius:3px;overflow:hidden;min-width:60px;}
+.dp-rating-fill{height:100%;border-radius:3px;transition:width .4s;}
+.dp-sub-actions{display:flex;gap:4px;opacity:0;transition:opacity .15s;}
+.dp-sub-row:hover .dp-sub-actions{opacity:1;}
+.dp-sub-edit-btn,.dp-sub-del-btn{padding:2px 6px;font-size:10px;border-radius:4px;border:none;cursor:pointer;font-weight:600;}
+.dp-sub-edit-btn{background:rgba(79,110,247,.2);color:var(--accent);}.dp-sub-edit-btn:hover{background:var(--accent);color:#fff;}
+.dp-sub-del-btn{background:rgba(239,68,68,.15);color:var(--red);}.dp-sub-del-btn:hover{background:var(--red);color:#fff;}
+.dp-add-sub-btn{display:flex;align-items:center;gap:5px;padding:5px 9px;border-radius:6px;border:1px dashed var(--border);background:transparent;color:var(--text2);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;width:100%;}
+.dp-add-sub-btn:hover{border-color:var(--accent);color:var(--accent);}
+.dp-empty-attr{text-align:center;padding:36px 16px;color:var(--text3);}
+.dp-empty-attr h3{font-size:14px;margin-bottom:6px;color:var(--text2);}
+.dp-empty-attr p{font-size:11px;line-height:1.7;}
+#dp-right{width:270px;flex-shrink:0;border-left:1px solid var(--border);overflow-y:auto;background:var(--panel);}
+.dp-rs-sec{padding:10px 12px;border-bottom:1px solid var(--border);}
+.dp-rs-hdr{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;}
+.dp-rs-cnt{font-size:10px;background:var(--panel2);padding:1px 7px;border-radius:20px;color:var(--text2);}
+.dp-ref-item{padding:6px 8px;border-radius:6px;background:var(--panel2);margin-bottom:4px;cursor:pointer;border-left:3px solid transparent;font-size:11px;line-height:1.5;transition:background .1s;}
+.dp-ref-item:hover{background:var(--panel3);}
+.dp-ref-item.lib{border-left-color:var(--green);background:rgba(16,185,129,.05);}
+.dp-ref-sub{font-size:10px;color:var(--text2);margin-top:2px;}
+.dp-badge{display:inline-block;padding:1px 5px;border-radius:8px;font-size:9px;font-weight:700;margin-right:2px;}
+.dp-badge.lib{background:rgba(16,185,129,.2);color:var(--green);}
+.dp-ref-empty{color:var(--text3);font-size:11px;text-align:center;padding:14px 0;}
+.dp-show-more{width:100%;padding:5px;font-size:10px;font-weight:600;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text2);cursor:pointer;margin-top:4px;}
+.dp-show-more:hover{border-color:var(--accent);color:var(--accent);}
+.dp-note-item{margin-bottom:8px;}
+.dp-note-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+.dp-note-idx{font-size:10px;font-weight:700;color:var(--text2);}
+.dp-note-del{background:none;border:none;color:var(--text2);cursor:pointer;font-size:11px;}.dp-note-del:hover{color:var(--red);}
+.dp-note-ta{width:100%;min-height:80px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:11px;color:var(--text);resize:vertical;outline:none;font-family:inherit;}
+.dp-note-ta:focus{border-color:var(--accent);}
+.dp-add-note-btn,.dp-save-note-btn{padding:5px 12px;font-size:11px;font-weight:600;border-radius:6px;cursor:pointer;margin-top:4px;}
+.dp-add-note-btn{border:1px dashed var(--border);background:transparent;color:var(--text2);margin-right:6px;}.dp-add-note-btn:hover{border-color:var(--accent);color:var(--accent);}
+.dp-save-note-btn{border:1px solid var(--green);background:transparent;color:var(--green);}.dp-save-note-btn:hover{background:var(--green);color:#fff;}
+#dp-modal-overlay{position:absolute;inset:0;background:rgba(0,0,0,.65);z-index:300;display:none;align-items:center;justify-content:center;}
+#dp-modal-overlay.show{display:flex;}
+#dp-modal{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:22px;width:400px;max-width:90vw;}
+#dp-modal h3{font-size:15px;font-weight:800;margin-bottom:16px;color:var(--text);}
+.dp-mfield{margin-bottom:12px;}
+.dp-mfield label{display:block;font-size:11px;font-weight:700;color:var(--text2);margin-bottom:5px;text-transform:uppercase;}
+.dp-mfield input,.dp-mfield select{width:100%;padding:7px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text);outline:none;}
+.dp-mfield input:focus,.dp-mfield select:focus{border-color:var(--accent);}
+.dp-mhint{font-size:10px;color:var(--text2);margin-top:4px;}
+.dp-modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;}
+.dp-modal-cancel{padding:7px 16px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text2);cursor:pointer;}
+.dp-modal-confirm{padding:7px 16px;font-size:12px;font-weight:700;border:none;border-radius:6px;background:var(--accent);color:#fff;cursor:pointer;}
+
+
+/* ── Affiliation chips ── */
+.affil-chip{display:inline-block;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;cursor:pointer;transition:all .15s;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);color:var(--purple);margin:1px;}
+.affil-chip.on{background:var(--purple);color:#fff;border-color:var(--purple);}
+.attr-chip{display:inline-block;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;cursor:pointer;transition:all .15s;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.3);color:#fb923c;margin:1px;}
+.attr-chip.on{background:#fb923c;color:#fff;border-color:#fb923c;}
+.affil-chip:hover{border-color:var(--purple);}
+/* ── Author overlay ── */
+#au-overlay{position:fixed;inset:0;z-index:150;background:var(--bg);display:none;flex-direction:column;overflow:hidden;}
+#au-overlay.show{display:flex;}
+#au-nav{height:48px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:12px;flex-shrink:0;}
+#au-back{padding:4px 12px;font-size:12px;font-weight:700;border:1px solid var(--border);border-radius:20px;background:transparent;color:var(--text2);cursor:pointer;transition:all .15s;}
+#au-back:hover{background:var(--panel2);color:var(--text);}
+#au-title{font-size:14px;font-weight:700;color:var(--text);}
+#au-body{flex:1;display:flex;overflow:hidden;min-height:0;}
+#au-left{width:290px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--panel);}
+#au-srch-wrap{padding:10px 12px;border-bottom:1px solid var(--border);}
+#au-srch-inp{width:100%;padding:6px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text);outline:none;}
+#au-srch-inp:focus{border-color:var(--accent);}
+#au-srch-filter{display:flex;gap:4px;padding:6px 12px;border-bottom:1px solid var(--border);}
+.au-fchip{padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text2);transition:all .12s;}
+.au-fchip.on{background:var(--accent);color:#fff;border-color:var(--accent);}
+#au-list{flex:1;overflow-y:auto;padding:6px;}
+.au-item{padding:7px 10px;border-radius:7px;cursor:pointer;border:1px solid transparent;margin-bottom:2px;transition:background .1s;}
+.au-item:hover{background:var(--panel2);}
+.au-item.sel{background:var(--panel2);border-color:var(--border);}
+.au-item-name{font-size:12px;font-weight:700;color:var(--text);}
+.au-item-meta{font-size:10px;color:var(--text2);margin-top:2px;}
+.au-badge{display:inline-block;padding:1px 5px;border-radius:8px;font-size:9px;font-weight:700;margin-right:3px;}
+.au-badge.lib{background:rgba(16,185,129,.2);color:var(--green);}
+.au-badge.ext{background:rgba(100,116,139,.15);color:var(--text2);}
+.au-badge.orcid{background:rgba(166,210,0,.15);color:#a6d200;}
+#au-right{flex:1;overflow-y:auto;padding:20px;background:var(--bg);}
+.au-det-name{font-size:20px;font-weight:800;color:var(--text);margin-bottom:4px;}
+.au-det-meta{font-size:12px;color:var(--text2);margin-bottom:12px;}
+.au-stats{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+.au-stat{padding:10px 14px;background:var(--panel);border-radius:8px;border:1px solid var(--border);text-align:center;}
+.au-stat-v{font-size:18px;font-weight:800;color:var(--text);}
+.au-stat-l{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-top:1px;}
+.au-sec{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text2);margin:16px 0 8px;display:flex;align-items:center;gap:6px;}
+.au-coauthor-wrap{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px;}
+.au-coauthor{padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;cursor:pointer;background:rgba(79,110,247,.1);border:1px solid rgba(79,110,247,.25);color:var(--accent);transition:all .12s;}
+.au-coauthor:hover{background:var(--accent);color:#fff;}
+.au-paper{padding:10px 12px;border-radius:8px;background:var(--panel);border:1px solid var(--border);margin-bottom:7px;cursor:pointer;border-left:4px solid var(--text3);transition:background .1s;}
+.au-paper:hover{background:var(--panel2);}
+.au-paper.lib{border-left-color:var(--green);}
+.au-paper-title{font-size:12px;font-weight:700;color:var(--text);line-height:1.4;}
+.au-paper-meta{font-size:10px;color:var(--text2);margin-top:3px;}
+.au-inst{font-size:11px;color:var(--text2);margin-bottom:12px;display:flex;align-items:center;gap:6px;}
+.au-enrich-hint{padding:8px 12px;background:rgba(79,110,247,.08);border:1px solid rgba(79,110,247,.2);border-radius:6px;font-size:11px;color:var(--text2);margin-bottom:12px;}
+
+.au-clickable{cursor:pointer;color:var(--accent);text-decoration:underline dotted;}
+.au-clickable:hover{text-decoration:underline;}
+
+/* ── DOI ADD MODAL ─────────────────────────── */
+#doi-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;display:none;align-items:center;justify-content:center;}
+#doi-overlay.show{display:flex;}
+#doi-box{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px 24px;width:460px;max-width:92vw;display:flex;flex-direction:column;gap:10px;}
+#doi-box h3{font-size:13px;font-weight:700;color:var(--text);margin:0;}
+#doi-box p{font-size:11px;color:var(--text2);line-height:1.6;margin:0;}
+#doi-ta{width:100%;min-height:90px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;padding:8px 10px;resize:vertical;font-family:inherit;outline:none;box-sizing:border-box;}
+#doi-ta:focus{border-color:var(--accent);}
+#doi-btns{display:flex;gap:8px;}
+#doi-go{flex:1;padding:7px;font-size:11px;font-weight:700;border-radius:6px;cursor:pointer;background:transparent;border:1px solid var(--accent);color:var(--accent);transition:all .15s;}
+#doi-go:hover{background:var(--accent);color:#fff;}
+#doi-cancel{flex:1;padding:7px;font-size:11px;font-weight:700;border-radius:6px;cursor:pointer;background:transparent;border:1px solid var(--border);color:var(--text2);transition:all .15s;}
+#doi-cancel:hover{background:var(--panel2);}
+#doi-log{font-size:10px;color:var(--text2);max-height:120px;overflow-y:auto;background:var(--panel2);border-radius:6px;padding:6px 8px;display:none;line-height:1.8;}
+</style>
+<style>
+.au-addable{position:relative;}
+.au-add-btn{
+  position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  opacity:0;transition:opacity .15s;
+  background:var(--accent,#4f6ef7);color:#fff;
+  border:none;border-radius:6px;width:22px;height:22px;
+  font-size:14px;font-weight:700;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  z-index:2;padding:0;line-height:1;
+}
+.au-addable:hover .au-add-btn{opacity:1;}
+.au-add-btn:hover{background:var(--green,#10b981)!important;}
+</style>
+</head>
+<body>
+<div id="topbar">
+  <h1>📚 文献引用图谱</h1>
+  <div class="sep"></div>
+  <button class="tbtn" onclick="document.getElementById('lib-input').click()">📂 导入文献库</button>
+  <button class="tbtn" style="border-color:var(--green);color:var(--green)" onclick="document.getElementById('zotero-oa-input').click()" title="导入Zotero JSON并通过OpenAlex标准化每篇文章（含OA作者ID/被引量）">📂 Zotero+OA</button>
+  <input type="file" id="zotero-oa-input" style="display:none" accept=".json" onchange="startZoteroOAImport(event)">
+  <button class="tbtn" onclick="openDOI()" title="通过DOI或标题手动添加文献">＋ 手动添加</button>
+  <input type="file" id="lib-input" style="display:none" accept=".json,.bib,.csv" onchange="loadLib(event)">
+  <button class="tbtn" id="btn-add" onclick="addSelected()" disabled>＋ 加入画布</button>
+  <button class="tbtn" id="btn-fetch" onclick="fetchAllCitations()" disabled>🔍 获取引用数据库</button>
+  <div class="sep"></div>
+  <button class="tbtn green" id="btn-save" onclick="saveCache()">💾 保存缓存</button>
+  <button class="tbtn gold" onclick="document.getElementById('cache-input').click()">📂 加载缓存</button>
+  <input type="file" id="cache-input" style="display:none" accept=".json" onchange="loadCacheFile(event)">
+  <div class="sep"></div>
+  <button class="tbtn" style="border-color:var(--purple);color:var(--purple)" onclick="saveMetaCache()" title="保存全部文献（标题/作者/笔记/标签等），体积小，可完整恢复文献库">📚 保存文献库</button>
+  <button class="tbtn" style="border-color:var(--purple);color:var(--purple)" onclick="document.getElementById('meta-input').click()" title="加载之前保存的文献库（合并到当前库中）">📂 加载文献库</button>
+  <input type="file" id="meta-input" style="display:none" accept=".json" onchange="loadMetaCacheFile(event)">
+  <div class="sep"></div>
+  <button class="tbtn" id="btn-enrich" style="border-color:var(--cyan);color:var(--cyan)" onclick="enrichAuthorIds()" title="从 OpenAlex 补全库中文献的作者ID，用于精确作者识别（需联网）">🔬 补全作者ID</button>
+  <button class="tbtn" style="border-color:var(--cyan);color:var(--cyan)" onclick="openAuthorOverlay()">👤 作者浏览</button>
+  <div class="sep"></div>
+  <div id="status-area">
+    <span id="status-txt">请导入文献库或加载缓存</span>
+    <div id="prog-wrap">
+      <div id="prog-bar"><div id="prog-fill"></div></div>
+      <span id="prog-txt"></span>
+    </div>
+  </div>
+</div>
+<div id="main">
+  <div id="left">
+    <div id="tbar">
+      <input type="text" id="srch" placeholder="🔍 搜索标题、作者、期刊、标签…" oninput="applyFilter()">
+      <div id="chip-wrap"></div>
+      <div id="affil-wrap" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;"></div>
+      <div id="frow">
+        <span id="selcount">0 / 0 篇</span>
+        <button class="smbtn" onclick="selAll()">全选</button>
+        <button class="smbtn" onclick="selNone()">清除</button>
+        <button class="smbtn" onclick="addSelected()" style="margin-left:auto;border-color:var(--green);color:var(--green)">＋画布</button>
+      </div>
+    </div>
+    <div id="twrap">
+      <table>
+        <thead><tr>
+          <th class="tc" onclick="toggleAll()"><span id="allck" class="cb"></span></th>
+          <th onclick="sortBy('title')">标题<span class="si"></span></th>
+          <th onclick="sortBy('authors')">作者<span class="si"></span></th>
+          <th onclick="sortBy('year')">年份<span class="si"></span></th>
+          <th onclick="sortBy('journal')">期刊<span class="si"></span></th>
+          <th>标签</th>
+          <th>课题组</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div id="right">
+    <div id="cbg"></div>
+    <canvas id="gc"></canvas>
+    <div id="unsaved">● 未保存</div>
+    <div id="chint">从左侧勾选文献 → 点「＋ 加入画布」<br>点「🔍 获取引用数据库」拉取全量引用/被引<br>再点击节点，按需展开邻居</div>
+    <div id="ctb">
+      <button class="ctbtn" onclick="zoomIn()">＋</button>
+      <span id="zlbl">100%</span>
+      <button class="ctbtn" onclick="zoomOut()">－</button>
+      <button class="ctbtn" onclick="fitView()">⊡ 适合</button>
+      <button class="ctbtn" id="phybtn" onclick="togglePhysics()">⏸ 暂停</button>
+      <button class="ctbtn" onclick="clearCanvas()">🗑 清空</button>
+      <button class="ctbtn" id="edges-toggle" onclick="toggleEdges()" title="显示/隐藏连线">🔗 连线 开</button>
+    <button class="ctbtn" onclick="syncEdgesFromDB()" style="color:var(--gold);border-color:var(--gold)" title="重建连线">↺ 重建连线</button>
+    </div>
+    <div id="legend">
+      <div class="leg-row"><div class="leg-dot" style="background:#10b981"></div>你的库中文献</div>
+      <div class="leg-row"><div class="leg-dot" style="background:#f59e0b"></div>引用关系中匹配库中的文献</div>
+      <div class="leg-row"><div class="leg-dot" style="background:#4f6ef7"></div>外部节点</div>
+      <div class="leg-row" style="margin-top:2px;font-size:10px">节点大小 = 被引次数</div>
+    </div>
+    <div id="tip"></div>
+    <div id="det">
+      <button id="det-x" onclick="closeDet()">✕</button>
+      <div id="det-head"></div>
+      <div id="det-canvas-btns"></div>
+      <div id="det-tabs">
+        <div class="dtab act" id="tab-refs" onclick="switchTab('refs')">📤 引用 <span id="refs-cnt"></span></div>
+        <div class="dtab" id="tab-cites" onclick="switchTab('cites')">📥 被引 <span id="cites-cnt"></span></div>
+        <div class="dtab" id="tab-notes" onclick="switchTab('notes')">📝 笔记</div>
+      </div>
+      <div id="det-body"></div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+// ── STATE ──
+let library=[], filtered=[];
+let selectedIds=new Set(), activeTags=new Set(), activeAffils=new Set(), activeAttrBlocks=new Set();
+let showEdges=true;
+let _sc='year', _sd=-1;
+let citationDB={};
+let coreDB={};   // { [libId]: {oaId,refs[],cites[],refCount,citeCount,totalCiteCount,fetchedAt} }
+let gNodes=[], gEdges=[], nMap={};
+let libDOI=new Map(), libTitle=new Map();
+let physOn=true, selNode=null, sim;
+let detNode=null, curTab='refs';
+const cv=document.getElementById('gc');
+const ctx=cv.getContext('2d');
+let W=0,H=0,tx=0,ty=0,tk=1;
+let dragN=null,dox=0,doy=0,isPan=false,psx=0,psy=0,pox=0,poy=0;
+
+// ── YEAR FIX ──
+function parseYear(raw){
+  if(!raw) return '';
+  const s=String(raw).trim();
+  const y4=s.match(/\b(19|20)\d{2}\b/);
+  if(y4) return y4[0];
+  if(/^\d{1,3}\/\d{1,3}$/.test(s)) return '';
+  return '';
+}
+
+// ── PARSERS ──
+function parseZoteroJSON(txt){
+  const data=JSON.parse(txt);
+  const raw=data.items||(Array.isArray(data)?data:[data]);
+  return raw.filter(it=>!['attachment','note'].includes(it.itemType)).map(normItem);
+}
+function normItem(it){
+  // ── Authors: handle Zotero creators format AND CSL-JSON author format ──
+  let authors=[];
+  if(it.creators&&it.creators.length){
+    authors=it.creators
+      .filter(c=>!c.creatorType||c.creatorType==='author'||c.creatorType==='editor')
+      .filter(c=>c.creatorType!=='editor'||it.creators.every(x=>x.creatorType==='editor'))
+      .map(c=>{
+        if(c.name)return c.name;
+        return [c.firstName,c.lastName].filter(Boolean).join(' ');
+      }).filter(Boolean);
+  } else if(it.author&&it.author.length){
+    // CSL-JSON format: [{family:'Zhang',given:'Wei'},{literal:'...'}]
+    authors=it.author.map(a=>{
+      if(a.literal)return a.literal;
+      return [a.given,a.family].filter(Boolean).join(' ');
+    }).filter(Boolean);
+  }
+  // ── Year: Zotero date string OR CSL-JSON issued field ──
+  let year='';
+  if(it.date||it.year){
+    year=parseYear(it.date||it.year||'');
+  } else if(it.issued){
+    const dp=it.issued['date-parts'];
+    if(dp&&dp[0]&&dp[0][0])year=String(dp[0][0]);
+  }
+  // ── Journal: multiple possible fields ──
+  const journal=it.publicationTitle||it.journalAbbreviation||it['container-title']||it.publisher||'';
+  // ── Tags: merge Zotero tags and CSL-JSON keyword ──
+  const tags=(it.tags||[]).map(t=>typeof t==='string'?t:(t.tag||'')).filter(Boolean);
+  if(it.keyword)(it.keyword.split?it.keyword.split(/[,;]/):it.keyword).forEach(k=>{const s=(k.tag||k||'').trim();if(s&&!tags.includes(s))tags.push(s);});
+  // ── Abstract ──
+  const abstract=it.abstractNote||it.abstract||'';
+  // ── DOI ──
+  const doi=(it.DOI||it.doi||'').replace('https://doi.org/','').trim();
+  // ── OA authorships: pre-fill if Zotero has ORCID in creator ──
+  const oaAuthorships=[];
+  return{
+    id:it.id||it.itemKey||it.key||uid(),
+    type:it.itemType||it.type||'journalArticle',
+    title:it.title||'(无标题)',
+    authors,year,journal,abstract,tags,
+    notes:(it.notes||[]).map(n=>typeof n==='string'?n:(n.note||'')).filter(Boolean),
+    doi,url:it.url||'',
+    dpAttrs:{},dpAffiliations:[],dpAttrRegistry:{},oaAuthorships
+  };
+}
+function parseBibTeX(txt){
+  const items=[];
+  txt.split(/^@/m).slice(1).forEach(e=>{
+    try{const tm=e.match(/^(\w+)\s*\{\s*([^,]+),/);if(!tm)return;const f={};const re=/(\w+)\s*=\s*[\{"]([\s\S]*?)[\}"],?\s*(?=\w+\s*=|\}$)/g;let m;while((m=re.exec(e))!==null)f[m[1].toLowerCase()]=m[2].trim();items.push({id:tm[2].trim(),type:tm[1].toLowerCase()==='article'?'journalArticle':tm[1],title:f.title||'(无标题)',authors:(f.author||'').split(/\s+and\s+/i).map(a=>a.trim()).filter(Boolean),year:parseYear(f.year||''),journal:f.journal||f.booktitle||'',abstract:f.abstract||'',tags:(f.keywords||'').split(/[,;]/).map(t=>t.trim()).filter(Boolean),notes:[],doi:(f.doi||'').trim(),url:f.url||''});}catch(_){}
+  });return items;
+}
+function parseCSV(txt){
+  const lines=txt.split('\n').filter(l=>l.trim());
+  const hdr=lines[0].split(',').map(h=>h.replace(/^"|"$/g,'').trim().toLowerCase());
+  return lines.slice(1).map(line=>{const vals=line.match(/(".*?"|[^,]+|(?<=,)(?=,))/g)||[];const o={};hdr.forEach((h,i)=>{o[h]=(vals[i]||'').replace(/^"|"$/g,'').trim();});return{id:o.key||uid(),type:o['item type']||'journalArticle',title:o.title||'(无标题)',authors:(o.author||'').split(';').map(a=>a.trim()).filter(Boolean),year:parseYear(o.year||o.date||''),journal:o['publication title']||o.journal||'',abstract:o['abstract note']||o.abstract||'',tags:(o['manual tags']||'').split(';').map(t=>t.trim()).filter(Boolean),notes:[],doi:(o.doi||'').trim(),url:o.url||''};});
+}
+
+// ── LOAD LIB ──
+function loadLib(e){
+  const file=e.target.files[0];if(!file)return;e.target.value='';
+  readText(file,text=>{
+    try{
+      const n=file.name.toLowerCase();
+      if(n.endsWith('.json')){const peek=JSON.parse(text);if(peek.version&&peek.nodes!==undefined){loadCacheData(peek);return;}
+      if(peek.type==='meta_cache'){
+        // Load as library file directly
+        const fakeEvt={target:{files:[file],value:''}};
+        loadMetaCacheFile(fakeEvt);return;
+      }library=parseZoteroJSON(text);}
+      else if(n.endsWith('.bib'))library=parseBibTeX(text);
+      else if(n.endsWith('.csv'))library=parseCSV(text);
+      else{toast('不支持此格式');return;}
+      buildIdx();buildChips();applyFilter();invalidateAuthorDB();
+      document.getElementById('btn-add').disabled=false;
+      document.getElementById('btn-fetch').disabled=false;
+      setStatus(`已导入 ${library.length} 篇文献`);toast(`✅ 导入 ${library.length} 篇文献`);
+    }catch(err){toast('解析出错: '+err.message);console.error(err);}
+  });
+}
+function buildIdx(){
+  libDOI.clear();libTitle.clear();
+  library.forEach(it=>{if(it.doi)libDOI.set(nd(it.doi),it);libTitle.set(nt(it.title),it);});
+}
+
+// ── TABLE ──
+function buildChips(){
+  const freq={};library.forEach(it=>it.tags.forEach(t=>{freq[t]=(freq[t]||0)+1;}));
+  const wrap=document.getElementById('chip-wrap');wrap.innerHTML='';
+  Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,35).forEach(([tag,cnt])=>{
+    const c=document.createElement('span');c.className='chip'+(activeTags.has(tag)?' on':'');
+    c.textContent=`${tag} (${cnt})`;c.onclick=()=>{activeTags.has(tag)?activeTags.delete(tag):activeTags.add(tag);c.classList.toggle('on',activeTags.has(tag));applyFilter();};
+    wrap.appendChild(c);
+  });
+  buildAffilChips();
+}
+function buildAttrChips(){
+  const freq={};
+  library.forEach(it=>Object.values(it.dpAttrs||{}).forEach(b=>{const n=b.name||'';if(n)freq[n]=(freq[n]||0)+1;}));
+  const wrap=document.getElementById('attr-chips-wrap');if(!wrap)return;
+  wrap.innerHTML='';
+  const entries=Object.entries(freq).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length){wrap.style.display='none';return;}
+  wrap.style.display='flex';
+  entries.forEach(([name,cnt])=>{
+    const c=document.createElement('span');
+    c.className='attr-chip'+(activeAttrBlocks.has(name)?' on':'');
+    c.textContent=name+' ('+cnt+')';c.title='筛选包含「'+name+'」属性的文献';
+    c.onclick=()=>{activeAttrBlocks.has(name)?activeAttrBlocks.delete(name):activeAttrBlocks.add(name);c.classList.toggle('on',activeAttrBlocks.has(name));applyFilter();};
+    wrap.appendChild(c);
+  });
+}
+
+function applyFilter(){
+  const q=document.getElementById('srch').value.toLowerCase();
+  filtered=library.filter(it=>{
+    const mq=!q||it.title.toLowerCase().includes(q)||it.authors.join(' ').toLowerCase().includes(q)||it.journal.toLowerCase().includes(q)||it.tags.some(t=>t.toLowerCase().includes(q));
+    const mt=activeTags.size===0||[...activeTags].every(t=>it.tags.includes(t));
+    const affils=(it.dpAffiliations||[]).map(a=>a.name);
+    const ma=activeAffils.size===0||[...activeAffils].some(a=>affils.includes(a));
+    const mab=activeAttrBlocks.size===0||[...activeAttrBlocks].every(bn=>Object.values(it.dpAttrs||{}).some(b=>(b.name||'')=== bn));
+    return mq&&mt&&ma&&mab;
+  });
+  sortF();renderTable();
+}
+function sortBy(col){
+  if(_sc===col)_sd*=-1;else{_sc=col;_sd=col==='year'?-1:1;}
+  document.querySelectorAll('thead th').forEach(th=>th.classList.remove('asc','desc'));
+  const idx={title:1,authors:2,year:3,journal:4}[col]||0;
+  const ths=document.querySelectorAll('thead th');if(ths[idx])ths[idx].classList.add(_sd===1?'asc':'desc');
+  sortF();renderTable();
+}
+function sortF(){filtered.sort((a,b)=>{let av=a[_sc]||'',bv=b[_sc]||'';if(Array.isArray(av))av=av[0]||'';if(Array.isArray(bv))bv=bv[0]||'';return _sd*String(av).localeCompare(String(bv));});}
+function renderTable(){
+  const tb=document.getElementById('tbody');tb.innerHTML='';
+  document.getElementById('selcount').textContent=`${selectedIds.size} / ${library.length} 篇`;
+  filtered.forEach(it=>{
+    const tr=document.createElement('tr');
+    if(selectedIds.has(it.id))tr.classList.add('sel');
+    if(nMap[it.id])tr.classList.add('onc');
+    const auth=it.authors.slice(0,2).join(', ')+(it.authors.length>2?' et al.':'');
+    const tags=it.tags.slice(0,3).map(t=>`<span class="tpill">${esc(t)}</span>`).join('');
+    const inDB=!!citationDB[it.id];
+    tr.innerHTML=`<td class="tc"><span class="cb ${selectedIds.has(it.id)?'ck':''}" onclick="toggleSel('${it.id}',event)">✓</span></td><td><span class="ct ttl" title="${esc(it.title)}">${nMap[it.id]?'<span class="gdot"></span>':''}${esc(it.title)}</span></td><td><span class="ct" style="color:var(--text2)">${esc(auth)}</span></td><td style="width:46px;text-align:center;color:var(--text2)">${it.year}</td><td><span class="ct" style="color:var(--text2)">${esc(it.journal)||'—'}</span></td><td><span class="ct">${tags}${inDB?'<span style="color:var(--green);font-size:9px;margin-left:2px">●DB</span>':''}</span></td><td><span class="ct">${(it.dpAffiliations||[]).slice(0,2).map(a=>`<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(139,92,246,.15);color:var(--purple);margin:1px;display:inline-block">${esc(a.name)}</span>`).join('')}</span></td>`;
+    tr.addEventListener('click',e=>{
+      if(e.target.classList.contains('cb')||e.target.closest('.del-btn'))return;
+      toggleSel(it.id,e);openLibDet(it);
+    });
+    const _dtd=document.createElement('td');
+    _dtd.style.cssText='width:28px;text-align:center;padding:2px 0;';
+    _dtd.innerHTML=`<button class="del-btn" title="从库中删除" onclick="deleteLibItem('${esc(it.id)}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:3px 5px;border-radius:4px" onmouseover="this.style.color='var(--red)';this.style.background='rgba(239,68,68,.1)'" onmouseout="this.style.color='var(--text3)';this.style.background='none'">🗑</button>`;
+    tr.appendChild(_dtd);
+    tb.appendChild(tr);
+  });
+}
+function toggleSel(id,e){e&&e.stopPropagation();selectedIds.has(id)?selectedIds.delete(id):selectedIds.add(id);renderTable();}
+function selAll(){filtered.forEach(it=>selectedIds.add(it.id));renderTable();}
+function selNone(){selectedIds.clear();renderTable();}
+function toggleAll(){selectedIds.size>0?selNone():selAll();}
+
+// ── CANVAS NODES ──
+function addSelected(){
+  if(!selectedIds.size){toast('请先勾选文献');return;}
+  let added=0;
+  selectedIds.forEach(id=>{
+    if(nMap[id])return;
+    const it=library.find(x=>x.id===id);if(!it)return;
+    const angle=(gNodes.length/Math.max(1,selectedIds.size))*Math.PI*2;
+    const r=Math.min(W,H)*.28;
+    const n=mkLibNode(it,W/2+r*Math.cos(angle),H/2+r*Math.sin(angle));
+    gNodes.push(n);nMap[id]=n;added++;
+  });
+  if(!added){toast('所选文献已在画布上');return;}
+  syncEdgesFromDB();
+  markUnsaved();updateHint();restartSim();renderTable();
+  toast(`✅ 已加入 ${added} 篇`);
+}
+function mkLibNode(it,x,y){
+  return{id:it.id,label:it.title,short:shortT(it.title),authors:it.authors,year:it.year,journal:it.journal,abstract:it.abstract,tags:[...it.tags],notes:[...it.notes],doi:it.doi,url:it.url,inLib:true,inDB:!!citationDB[it.id],citationCount:0,openAlexId:null,nodeType:'lib',x:x||W/2+(Math.random()-.5)*200,y:y||H/2+(Math.random()-.5)*200,vx:0,vy:0,fx:null,fy:null};
+}
+function mkExtNode(work,nodeType,anchor){
+  const doi=(work.doi||'').replace('https://doi.org/','');
+  const oaId=(work.id||'').replace('https://openalex.org/','');
+  const title=work.title||'(Unknown)';
+  const libMatch=(doi&&libDOI.get(nd(doi)))||libTitle.get(nt(title));
+  const nodeId=libMatch?libMatch.id:(oaId||uid());
+  if(nMap[nodeId])return nMap[nodeId];
+  const n={id:nodeId,label:title,short:shortT(title),authors:(work.authorships||[]).map(a=>a.author?.display_name||'').filter(Boolean).slice(0,3),year:String(work.publication_year||''),journal:work.primary_location?.source?.display_name||'',abstract:'',tags:[],notes:[],doi,url:work.id||'',inLib:!!libMatch,inDB:!!citationDB[nodeId],citationCount:work.cited_by_count||0,openAlexId:work.id||null,nodeType,x:(anchor?.x||W/2)+(Math.random()-.5)*200,y:(anchor?.y||H/2)+(Math.random()-.5)*200,vx:0,vy:0,fx:null,fy:null};
+  if(libMatch){n.authors=libMatch.authors.length?libMatch.authors:n.authors;n.year=libMatch.year||n.year;n.journal=libMatch.journal||n.journal;n.tags=[...libMatch.tags];n.notes=[...libMatch.notes];}
+  gNodes.push(n);nMap[nodeId]=n;return n;
+}
+function addEdge(sid,tid){
+  if(!sid||!tid||sid===tid)return;
+  const s=nMap[sid],t=nMap[tid];if(!s||!t||s===t)return;
+  if(gEdges.some(e=>(e.source?.id||e.source)===s.id&&(e.target?.id||e.target)===t.id))return;
+  gEdges.push({source:s,target:t});
+}
+
+// ── LOAD ONTO CANVAS (user-triggered) ──
+function loadRefsOntoCanvas(libId){
+  const n=nMap[libId];if(!n)return;
+  const db=citationDB[libId];if(!db){toast('无引用数据，请先「获取引用数据库」');return;}
+  let added=0;
+  (db.refs||[]).forEach(w=>{const extN=mkExtNode(w,'ref',n);if(extN){addEdge(n.id,extN.id);added++;}});
+  markUnsaved();restartSim();renderTable();refreshDet();
+  toast(`已加载 ${added} 个引用节点`);
+}
+function loadCitesOntoCanvas(libId){
+  const n=nMap[libId];if(!n)return;
+  const db=citationDB[libId];if(!db){toast('无被引数据，请先「获取引用数据库」');return;}
+  let added=0;
+  (db.cites||[]).forEach(w=>{const extN=mkExtNode(w,'cite',n);if(extN){addEdge(extN.id,n.id);added++;}});
+  markUnsaved();restartSim();renderTable();refreshDet();
+  toast(`已加载 ${added} 个被引节点`);
+}
+function removeNodeFromCanvas(id){
+  delete nMap[id];
+  gNodes=gNodes.filter(n=>n.id!==id);
+  gEdges=gEdges.filter(e=>(e.source?.id||e.source)!==id&&(e.target?.id||e.target)!==id);
+  markUnsaved();restartSim();renderTable();
+  if(detNode?.id===id)closeDet();else refreshDet();
+  toast('已从画布移除');
+}
+
+// ── EDIT: TAGS & NOTES ──
+function addTag(libId,tag){
+  tag=tag.trim();if(!tag)return;
+  const it=library.find(x=>x.id===libId);
+  if(it&&!it.tags.includes(tag)){it.tags.push(tag);}
+  const n=nMap[libId];if(n&&!n.tags.includes(tag)){n.tags.push(tag);}
+  markUnsaved();refreshDet();buildChips();renderTable();
+}
+function removeTag(libId,tag){
+  const it=library.find(x=>x.id===libId);
+  if(it){it.tags=it.tags.filter(t=>t!==tag);}
+  const n=nMap[libId];if(n){n.tags=n.tags.filter(t=>t!==tag);}
+  markUnsaved();refreshDet();buildChips();renderTable();
+}
+function saveNotes(libId){
+  const textareas=document.querySelectorAll('.note-ta');
+  const notes=[...textareas].map(ta=>ta.value.trim()).filter(Boolean);
+  const it=library.find(x=>x.id===libId);if(it)it.notes=notes;
+  const n=nMap[libId];if(n)n.notes=notes;
+  markUnsaved();refreshDet();toast('✅ 笔记已保存');
+}
+function addNoteField(libId){
+  const wrap=document.getElementById('note-editor-'+libId);if(!wrap)return;
+  const cnt=wrap.querySelectorAll('.note-item').length;
+  const div=document.createElement('div');div.className='note-item';
+  div.innerHTML=`<div class="note-header"><span class="note-idx">笔记 ${cnt+1}</span><button class="note-del" onclick="this.closest('.note-item').remove()">✕</button></div><textarea class="note-ta" placeholder="在此输入笔记…"></textarea>`;
+  wrap.insertBefore(div,wrap.querySelector('.add-note-btn'));
+}
+
+// ── OPENALEX FETCH ──
+let _fetchCancelled=false,_isFetching=false;
+
+async function fetchAllCitations(){
+  // Toggle: if already fetching, cancel it
+  if(_isFetching){_fetchCancelled=true;return;}
+
+  const toFetch=library.filter(it=>!citationDB[it.id]);
+  if(!toFetch.length){toast('所有文献已有引用数据');return;}
+
+  _fetchCancelled=false;_isFetching=true;
+  const btn=document.getElementById('btn-fetch');
+  btn.textContent='⛔ 取消获取';btn.disabled=false;
+  showProg(true);let done=0,failed=0;
+
+  for(const it of toFetch){
+    if(_fetchCancelled){toast('⛔ 已取消');break;}
+    setStatus('获取引用数据 '+(done+1)+'/'+toFetch.length+'：'+shortT(it.title));
+    setProg(done,toFetch.length);
+    try{await fetchOneCitationDB(it);}catch(_){failed++;}
+    done++;setProg(done,toFetch.length);
+    await sleep(150);
+  }
+
+  _isFetching=false;_fetchCancelled=false;
+  markUnsaved();showProg(false);
+  const total=library.reduce((s,it)=>s+(citationDB[it.id]?1:0),0);
+  setStatus('✅ 引用数据库：'+total+'/'+library.length+' 篇'+(failed?' ('+failed+' 篇失败)':''));
+  btn.textContent='🔄 补充获取';btn.disabled=false;
+  renderTable();refreshDet();toast('✅ 引用数据库更新完成');
+}
+
+async function fetchOneCitationDB(item){
+  // Declare vars OUTSIDE try so they're accessible for refs/cites fetch below
+  let oaId=null,oaRefs=[],citedByCount=0,w=null,libIt=null;
+  const url=item.doi
+    ?`https://api.openalex.org/works/doi:${encodeURIComponent(item.doi)}?select=id,title,cited_by_count,referenced_works,authorships,primary_topic,keywords,fwci,open_access,is_retracted,abstract_inverted_index`
+    :`https://api.openalex.org/works?filter=title.search:${encodeURIComponent((item.title||'').slice(0,80))}&per_page=1&select=id,title,cited_by_count,referenced_works,authorships`;
+  try{
+    const r=await fetch(url);
+    if(!r.ok)return;
+    const d=await r.json();
+    w=d.id?d:d.results?.[0];
+    if(!w)return;
+    oaId=w.id||null;
+    oaRefs=w.referenced_works||[];
+    citedByCount=w.cited_by_count||0;
+    if(nMap[item.id])nMap[item.id].citationCount=citedByCount;
+    libIt=library.find(x=>x.id===item.id);
+    if(libIt)libIt.citationCount=citedByCount;
+    if(libIt&&w.authorships){
+      libIt.oaAuthorships=(w.authorships||[]).map(a=>({
+        id:(a.author?.id||'').replace('https://openalex.org/',''),
+        name:a.author?.display_name||'',
+        orcid:a.author?.orcid||'',
+        institution:(a.institutions||[])[0]?.display_name||''
+      }));
+    }
+    if(libIt&&w.primary_topic){
+      libIt.oaTopic={
+        topic:w.primary_topic.display_name,
+        subfield:w.primary_topic.subfield?.display_name,
+        field:w.primary_topic.field?.display_name,
+        domain:w.primary_topic.domain?.display_name
+      };
+    }
+    if(libIt&&w.keywords?.length)libIt.oaKeywords=w.keywords.map(k=>k.display_name);
+    if(libIt&&w.fwci!=null)libIt.oaFwci=w.fwci;
+    if(libIt&&w.open_access)libIt.oaOpenAccess={isOA:w.open_access.is_oa,status:w.open_access.oa_status,url:w.open_access.oa_url};
+    if(libIt&&w.is_retracted!=null)libIt.oaRetracted=w.is_retracted;
+    if(libIt&&w.abstract_inverted_index){
+      try{
+        const idx=w.abstract_inverted_index;
+        const allPos=Object.values(idx).flat();
+        if(allPos.length){
+          const maxPos=Math.max(...allPos)+1;
+          const arr=new Array(maxPos).fill('');
+          Object.entries(idx).forEach(([word,pos])=>pos.forEach(p=>{if(p<maxPos)arr[p]=word;}));
+          libIt.oaAbstract=arr.join(' ');
+        }
+      }catch(_){}
+    }
+  }catch(_){return;}
+
+  if(!oaId)return; // nothing to fetch if we didn't get an OA ID
+
+  // Fetch refs (papers this paper cites)
+  let refs=[];
+  if(oaRefs.length){
+    try{
+      const ids=oaRefs.slice(0,50).map(r=>r.replace('https://openalex.org/','')).join('|');
+      const r=await fetch(`https://api.openalex.org/works?filter=openalex_id:${ids}&per_page=50&select=id,title,authorships,publication_year,primary_location,cited_by_count,doi`);
+      if(r.ok){const d=await r.json();refs=d.results||[];}
+    }catch(_){}
+  }
+
+  // Fetch cites (papers that cite this paper) – cap at 200 to avoid hanging
+  let cites=[];
+  const oaShort=oaId.replace('https://openalex.org/','');
+  const perPage=100;let page=1,totalPages=1;
+  do{
+    try{
+      const r=await fetch(`https://api.openalex.org/works?filter=cites:${oaShort}&sort=cited_by_count:desc&per_page=${perPage}&page=${page}&select=id,title,authorships,publication_year,primary_location,cited_by_count,doi`);
+      if(!r.ok)break;
+      const d=await r.json();
+      cites=cites.concat(d.results||[]);
+      totalPages=Math.ceil((d.meta?.count||0)/perPage);
+      page++;
+      if(page<=totalPages)await sleep(120);
+    }catch(_){break;}
+  }while(page<=totalPages&&cites.length<200); // reduced from 500 to 200
+
+  citationDB[item.id]={oaId,refs,cites,refCount:refs.length,citeCount:cites.length,totalCiteCount:citedByCount,fetchedAt:new Date().toISOString()};
+}
+
+async function fetchOneThenRefresh(libId){
+  const it=library.find(x=>x.id===libId);if(!it)return;
+  setStatus(`获取：${shortT(it.title)}`);showProg(true);
+  await fetchOneCitationDB(it);
+  showProg(false);markUnsaved();refreshDet();renderTable();
+  const db=citationDB[libId];
+  if(db)toast(`✅ 引用 ${db.refCount} / 被引 ${db.citeCount}（共 ${db.totalCiteCount}）`);
+  else toast('未找到 OpenAlex 数据');
+}
+
+// ── SIMULATION ──
+function restartSim(){
+  if(sim)sim.stop();
+  if(!gNodes.length){render();return;}
+  physOn=true;document.getElementById('phybtn').textContent='⏸ 暂停';
+  sim=d3.forceSimulation(gNodes)
+    .force('link',d3.forceLink(gEdges).id(d=>d.id).distance(d=>(d.source.inLib&&d.target.inLib)?140:110).strength(0.5))
+    .force('charge',d3.forceManyBody().strength(d=>d.inLib?-380:-150).distanceMax(600))
+    .force('center',d3.forceCenter(W/2,H/2).strength(0.04))
+    .force('collision',d3.forceCollide().radius(d=>nR(d)+5))
+    .alphaDecay(0.022).velocityDecay(0.42)
+    .on('tick',render);
+}
+
+// ── RENDER ──
+function nR(n){return(n.inLib?16:8)+Math.min(Math.sqrt(n.citationCount||0)*1.0,13);}
+function nColor(n){if(n.inLib)return'#10b981';if(n.inDB)return'#f59e0b';return'#4f6ef7';}
+function render(){
+  if(!ctx)return;ctx.clearRect(0,0,W,H);ctx.save();ctx.translate(tx,ty);ctx.scale(tk,tk);
+  if(showEdges){gEdges.forEach(e=>{
+    const s=e.source,t=e.target;if(!s||!t||s.x==null||t.x==null)return;
+    const hi=selNode&&(s.id===selNode.id||t.id===selNode.id);
+    const g=ctx.createLinearGradient(s.x,s.y,t.x,t.y);
+    if(hi){g.addColorStop(0,'rgba(79,110,247,.9)');g.addColorStop(1,'rgba(79,110,247,.35)');}
+    else{const a=s.inLib||t.inLib?.3:.12;g.addColorStop(0,`rgba(148,163,184,${a})`);g.addColorStop(1,`rgba(148,163,184,${a*.4})`);}
+    ctx.beginPath();ctx.moveTo(s.x,s.y);ctx.lineTo(t.x,t.y);ctx.strokeStyle=g;ctx.lineWidth=hi?2:s.inLib||t.inLib?1.1:.6;ctx.stroke();
+    if(hi){const ang=Math.atan2(t.y-s.y,t.x-s.x),r=nR(t)+2;const ax=t.x-Math.cos(ang)*r,ay=t.y-Math.sin(ang)*r;ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(ax-10*Math.cos(ang-.4),ay-10*Math.sin(ang-.4));ctx.lineTo(ax-10*Math.cos(ang+.4),ay-10*Math.sin(ang+.4));ctx.closePath();ctx.fillStyle='rgba(79,110,247,.9)';ctx.fill();}
+  })};
+  gNodes.forEach(n=>{
+    if(n.x==null)return;
+    const r=nR(n),isSel=selNode&&selNode.id===n.id;
+    if(isSel||n.inLib){const gr=ctx.createRadialGradient(n.x,n.y,r*.4,n.x,n.y,r+(isSel?12:5));const col=isSel?'79,110,247':'16,185,129';gr.addColorStop(0,`rgba(${col},${isSel?.45:.22})`);gr.addColorStop(1,`rgba(${col},0)`);ctx.beginPath();ctx.arc(n.x,n.y,r+(isSel?12:5),0,Math.PI*2);ctx.fillStyle=gr;ctx.fill();}
+    ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);ctx.fillStyle=nColor(n);ctx.fill();
+    ctx.strokeStyle=isSel?'#fff':n.inLib?'rgba(255,255,255,.45)':'rgba(255,255,255,.1)';ctx.lineWidth=isSel?2.5:1;ctx.stroke();
+    if(n.inLib||tk>1.4){const lbl=n.short.length>18?n.short.slice(0,18)+'…':n.short;ctx.font=`${n.inLib?'600':'400'} ${Math.max(9,Math.min(12,r*.9))}px Segoe UI,system-ui,sans-serif`;ctx.fillStyle=n.inLib?'rgba(255,255,255,.95)':'rgba(255,255,255,.6)';ctx.textAlign='center';ctx.textBaseline='top';ctx.shadowColor='rgba(0,0,0,.9)';ctx.shadowBlur=5;ctx.fillText(lbl,n.x,n.y+r+5);ctx.shadowBlur=0;}
+  });
+  ctx.restore();
+  document.getElementById('chint').style.display=gNodes.length?'none':'block';
+}
+
+// ── INTERACTION ──
+function hitN(cx,cy){const wx=(cx-tx)/tk,wy=(cy-ty)/tk;for(let i=gNodes.length-1;i>=0;i--){const n=gNodes[i],r=nR(n)+5;if((n.x-wx)**2+(n.y-wy)**2<r*r)return n;}return null;}
+cv.addEventListener('mousedown',e=>{const n=hitN(e.offsetX,e.offsetY);if(n){dragN=n;dox=e.offsetX;doy=e.offsetY;n.fx=n.x;n.fy=n.y;cv.style.cursor='grabbing';}else{isPan=true;psx=e.clientX;psy=e.clientY;pox=tx;poy=ty;cv.style.cursor='move';}});
+cv.addEventListener('mousemove',e=>{if(dragN){const dx=(e.offsetX-dox)/tk,dy=(e.offsetY-doy)/tk;dragN.fx=dragN.x+dx;dragN.fy=dragN.y+dy;dragN.x=dragN.fx;dragN.y=dragN.fy;dox=e.offsetX;doy=e.offsetY;if(sim)sim.alpha(0.08).restart();render();return;}if(isPan){tx=pox+(e.clientX-psx);ty=poy+(e.clientY-psy);render();return;}const n=hitN(e.offsetX,e.offsetY),tip=document.getElementById('tip');if(n){cv.style.cursor='pointer';const auth=n.authors.slice(0,2).join(', ')+(n.authors.length>2?' et al.':'');tip.innerHTML=`<b>${esc(n.short)}</b><br>${auth?esc(auth)+'<br>':''}${n.year?n.year+' ':''}${n.journal?'· '+esc(n.journal)+'<br>':''}被引: <b>${n.citationCount}</b>${n.inLib?' <span style="color:var(--green)">📚 库中</span>':''}`;tip.style.left=(e.offsetX+14)+'px';tip.style.top=(e.offsetY-8)+'px';tip.classList.add('show');}else{cv.style.cursor='';tip.classList.remove('show');}});
+cv.addEventListener('mouseup',()=>{if(dragN){dragN.fx=null;dragN.fy=null;dragN=null;}isPan=false;cv.style.cursor='';});
+cv.addEventListener('click',e=>{const n=hitN(e.offsetX,e.offsetY);if(n){selNode=n;openNodeDet(n);render();}else{selNode=null;closeDet();render();}});
+cv.addEventListener('wheel',e=>{e.preventDefault();const f=e.deltaY<0?1.12:.88;tx=e.offsetX-(e.offsetX-tx)*f;ty=e.offsetY-(e.offsetY-ty)*f;tk=Math.min(5,Math.max(.1,tk*f));document.getElementById('zlbl').textContent=Math.round(tk*100)+'%';render();},{passive:false});
+
+// ── DETAIL PANEL ──
+function openLibDet(it){const n=nMap[it.id]||{...it,short:shortT(it.title),inLib:true,citationCount:0,nodeType:'lib'};detNode=n;document.getElementById('det').classList.add('open');renderDetHead(n);renderCanvasBtns(n);activateTab(curTab||'refs');}
+function openNodeDet(n){detNode=n;document.getElementById('det').classList.add('open');renderDetHead(n);renderCanvasBtns(n);activateTab(curTab||'refs');}
+function closeDet(){document.getElementById('det').classList.remove('open');detNode=null;}
+function refreshDet(){if(detNode){const fresh=nMap[detNode.id]||library.find(x=>x.id===detNode.id);if(fresh){detNode={...detNode,...fresh,short:shortT(fresh.label||fresh.title||'')};} renderDetHead(detNode);renderCanvasBtns(detNode);renderDetBody();}}
+function switchTab(t){curTab=t;activateTab(t);}
+function activateTab(t){['refs','cites','notes'].forEach(x=>{document.getElementById('tab-'+x).classList.toggle('act',x===t);});curTab=t;renderDetBody();}
+
+function renderDetHead(n){
+  const it=library.find(x=>x.id===n.id);
+  const src=it||n;
+  const authArr=src.authors||[];
+  const auth=authArr.length
+    ?authArr.map(a=>`<span class="au-clickable" onclick="auClickAuthorName('${esc(a)}')"
+       title="在作者浏览器中查看">${esc(a)}</span>`).join(', ')
+    :'—';
+  const doi=src.doi?`<a href="https://doi.org/${src.doi}" target="_blank" style="color:var(--accent)">${esc(src.doi)}</a>`:'—';
+  const db=src.inLib!==false?citationDB[src.id]:null;
+  const dbInfo=db?`<span style="color:var(--green);font-size:10px">●DB  引用 ${db.refCount} / 被引 ${db.citeCount}${db.totalCiteCount>db.citeCount?' (共'+db.totalCiteCount+')':''}</span>`:(src.inLib!==false?`<span style="color:var(--text2);font-size:10px">尚无引用数据</span>`:'');
+  const tagsHtml=(src.tags||[]).map(t=>`<span class="dtag">${esc(t)}<span class="dtag-x" onclick="removeTag('${src.id}','${esc(t)}')">✕</span></span>`).join('');
+  document.getElementById('det-head').innerHTML=`
+    <h3>${esc(src.label||src.title||'')}</h3>
+    <div class="dr"><span class="dl">作者</span><span class="dv" style="line-height:1.8">${auth}</span></div>
+    <div class="dr"><span class="dl">年份</span><span class="dv">${src.year||'—'}</span></div>
+    <div class="dr"><span class="dl">期刊</span><span class="dv">${esc(src.journal)||'—'}</span></div>
+    <div class="dr"><span class="dl">被引</span><span class="dv" style="color:var(--accent);font-weight:700">${src.citationCount||0}</span></div>
+    <div class="dr"><span class="dl">DOI</span><span class="dv" style="max-width:190px;overflow:hidden;text-overflow:ellipsis;display:block">${doi}</span></div>
+    <div class="dtags" id="tag-area-${src.id}">
+      ${tagsHtml}
+      <span class="tag-add-wrap">
+        <input class="tag-add-inp" id="tag-inp-${src.id}" placeholder="＋ 标签" onkeydown="if(event.key==='Enter'){addTag('${src.id}',this.value);this.value='';}">
+      </span>
+    </div>
+    ${dbInfo?`<div style="margin-top:6px">${dbInfo}</div>`:''}`;
+}
+
+function renderCanvasBtns(n){
+  const onCanvas=!!nMap[n.id];
+  const db=n.inLib!==false?citationDB[n.id]:null;
+  let html='<div class="row">';
+  if(!onCanvas&&n.inLib!==false){html+=`<button class="det-btn green" onclick="addOneToCanvas('${n.id}')">＋ 加入画布</button>`;}
+  else if(onCanvas){html+=`<button class="det-btn red" onclick="removeNodeFromCanvas('${n.id}')">✕ 从画布移除</button>`;}
+  html+='</div>';
+  if(onCanvas&&n.inLib!==false){
+    html+='<div class="row">';
+    if(db?.refs?.length)html+=`<button class="det-btn gold" onclick="loadRefsOntoCanvas('${n.id}')">＋ 引用节点 (${db.refs.length})</button>`;
+    if(db?.cites?.length)html+=`<button class="det-btn purple" onclick="loadCitesOntoCanvas('${n.id}')">＋ 被引节点 (${db.cites.length})</button>`;
+    if(!db)html+=`<button class="det-btn" onclick="fetchOneThenRefresh('${n.id}')">🔍 获取引用数据</button>`;
+    html+='</div>';
+  }
+  // Add delete button for library items
+  if(n.inLib!==false){
+    html+='<div class="row" style="margin-top:4px">';
+    html+=`<button class="det-btn" style="border-color:var(--red);color:var(--red)" onclick="deleteLibItem('${n.id}')" title="从文献库中删除">🗑 从库中删除</button>`;
+    html+='</div>';
+  }
+  document.getElementById('det-canvas-btns').innerHTML=html;
+}
+
+function addOneToCanvas(libId){const it=library.find(x=>x.id===libId);if(!it||nMap[libId])return;const n=mkLibNode(it,W/2+(Math.random()-.5)*160,H/2+(Math.random()-.5)*160);gNodes.push(n);nMap[libId]=n;syncEdgesFromDB();markUnsaved();updateHint();restartSim();renderTable();refreshDet();toast('已加入画布');}
+
+function renderDetBody(){
+  if(!detNode)return;
+  const n=detNode,body=document.getElementById('det-body');
+  const it=library.find(x=>x.id===n.id);
+  const src=it||n;
+
+  if(curTab==='notes'){
+    const notes=src.notes||[];
+    let html=`<div class="note-editor-wrap" id="note-editor-${src.id}">`;
+    notes.forEach((nt,i)=>{html+=`<div class="note-item"><div class="note-header"><span class="note-idx">笔记 ${i+1}</span><button class="note-del" onclick="this.closest('.note-item').remove()">✕</button></div><textarea class="note-ta">${esc(nt.replace(/<[^>]+>/g,' '))}</textarea></div>`;});
+    html+=`<button class="add-note-btn" onclick="addNoteField('${src.id}')">＋ 添加笔记</button>`;
+    html+=`<button class="save-note-btn" onclick="saveNotes('${src.id}')">💾 保存笔记</button>`;
+    html+='</div>';
+    body.innerHTML=html;return;
+  }
+
+  const db=src.inLib!==false?citationDB[src.id]:null;
+  const list=curTab==='refs'?(db?.refs||[]):(db?.cites||[]);
+  const total=curTab==='refs'?(db?.refCount||0):(db?.totalCiteCount||0);
+  const fetched=list.length;
+  document.getElementById(curTab==='refs'?'refs-cnt':'cites-cnt').textContent=`(${fetched}${total>fetched?'/'+total:''})`;
+  document.getElementById(curTab==='refs'?'cites-cnt':'refs-cnt').textContent=`(${curTab==='refs'?(db?.citeCount||0):(db?.refCount||0)})`;
+
+  if(!db){body.innerHTML=`<div class="empty-msg">尚无引用数据${src.inLib!==false?'':'\n此文献不在你的库中'}</div>`;return;}
+  if(!list.length){body.innerHTML=`<div class="empty-msg">${curTab==='refs'?'无引用记录':'无被引记录'}</div>`;return;}
+
+  const sorted=[...list].sort((a,b)=>(b.cited_by_count||0)-(a.cited_by_count||0));
+  let html='';
+  sorted.forEach(w=>{
+    const doi=(w.doi||'').replace('https://doi.org/','');
+    const title=w.title||'(Unknown)';
+    const oaId=(w.id||'').replace('https://openalex.org/','');
+    const matchId=(doi&&libDOI.get(nd(doi)))?.id||libTitle.get(nt(title))?.id;
+    const inLib=!!matchId;
+    const onCanvas=!!(matchId?nMap[matchId]:nMap[oaId]);
+    const auth=(w.authorships||[]).map(a=>a.author?.display_name||'').slice(0,2).join(', ');
+    const year=w.publication_year||'';
+    const journal=w.primary_location?.source?.display_name||'';
+    const cite=w.cited_by_count||0;
+    const clickId=matchId||oaId;
+    html+=`<div class="nb ${inLib?'lib':''} ${onCanvas?'oncanvas':''}" onclick="clickNbItem('${esc(clickId)}','${esc(doi)}','${esc(w.id||'')}')">
+      ${inLib?'<span class="nbadge lib">库中</span>':''}${onCanvas?'<span class="nbadge onc">画布上</span>':''}
+      <span>${esc(shortT(title))}</span>
+      <div class="nb-sub">${esc(auth)}${year?' · '+year:''}${journal?' · '+esc(journal):''}</div>
+      <div class="nb-cite">📊 被引 ${cite}</div>
+    </div>`;
+  });
+  body.innerHTML=html;
+}
+
+function clickNbItem(nodeId,doi,oaUrl){if(nMap[nodeId])jumpTo(nodeId);else if(doi)window.open('https://doi.org/'+doi,'_blank');else if(oaUrl)window.open(oaUrl,'_blank');}
+function jumpTo(id){const n=nMap[id];if(!n)return;selNode=n;tx=W/2-n.x*tk;ty=H/2-n.y*tk;openNodeDet(n);render();}
+
+// ── CONTROLS ──
+function togglePhysics(){physOn=!physOn;if(physOn){if(sim)sim.alpha(0.3).restart();document.getElementById('phybtn').textContent='⏸ 暂停';}else{if(sim)sim.stop();document.getElementById('phybtn').textContent='▶ 继续';}}
+function clearCanvas(){if(sim)sim.stop();gNodes=[];gEdges=[];nMap={};selNode=null;detNode=null;document.getElementById('det').classList.remove('open');document.getElementById('unsaved').classList.remove('show');renderTable();render();toast('画布已清空');}
+function fitView(){if(!gNodes.length)return;const xs=gNodes.map(n=>n.x),ys=gNodes.map(n=>n.y);const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);const k=Math.min(W/(x1-x0+120),H/(y1-y0+120),2.5);tk=k;tx=W/2-(x0+x1)/2*k;ty=H/2-(y0+y1)/2*k;document.getElementById('zlbl').textContent=Math.round(k*100)+'%';render();}
+function zoomIn(){tk=Math.min(5,tk*1.2);document.getElementById('zlbl').textContent=Math.round(tk*100)+'%';render();}
+function zoomOut(){tk=Math.max(.1,tk/1.2);document.getElementById('zlbl').textContent=Math.round(tk*100)+'%';render();}
+function updateHint(){document.getElementById('chint').style.display=gNodes.length?'none':'block';}
+
+// ── SAVE / LOAD ──
+async function saveCache(){
+  const hasData=gNodes.length||library.length||Object.keys(citationDB).length;
+  if(!hasData){toast('没有数据可保存');return;}
+  const btn=document.getElementById('btn-save');
+  btn.disabled=true;btn.textContent='💾 保存中…';
+  setStatus('正在序列化数据，请稍候…');
+  await sleep(30);  // yield to browser so UI updates
+  try{
+    const data={
+      version:5,savedAt:new Date().toISOString(),
+      library,citationDB,
+      nodes:gNodes.map(n=>({...n,vx:0,vy:0,fx:null,fy:null,x:Math.round(n.x||0),y:Math.round(n.y||0)})),
+      edges:gEdges.map(e=>({source:e.source?.id||e.source,target:e.target?.id||e.target})),
+    };
+    await sleep(10);
+    const jsonStr=JSON.stringify(data);
+    await sleep(10);
+    const blob=new Blob([jsonStr],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=`citation_cache_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),8000);
+    document.getElementById('unsaved').classList.remove('show');
+    const kb=Math.round(jsonStr.length/1024);
+    const sizeStr=kb<1024?kb+' KB':(kb/1024).toFixed(1)+' MB';
+    setStatus(`✅ 已保存（${sizeStr}）`);
+    toast(`✅ 已保存（${sizeStr}）`);
+  }catch(err){
+    toast('❌ 保存失败: '+err.message);
+    setStatus('保存失败: '+err.message);
+    console.error(err);
+  }finally{
+    btn.disabled=false;btn.textContent='💾 保存缓存';
+  }
+}
+
+function loadCacheFile(e){
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  const sizeMB=(f.size/1024/1024).toFixed(1);
+  setStatus(`📂 正在读取文件（${sizeMB} MB）…`);
+  showProg(true);setProg(0,1);
+  const reader=new FileReader();
+  reader.onprogress=ev=>{if(ev.lengthComputable)setProg(ev.loaded,ev.total);};
+  reader.onload=async ev=>{
+    try{
+      setStatus('🔄 正在解析 JSON…');setProg(0,1);
+      await sleep(30);
+      const data=JSON.parse(ev.target.result);
+      await sleep(10);
+      loadCacheData(data);
+    }catch(err){
+      toast('❌ 解析失败: '+err.message);
+      setStatus('解析失败: '+err.message);
+      console.error(err);
+    }finally{showProg(false);}
+  };
+  reader.readAsText(f);
+}
+
+function loadCacheData(data){
+  if(!data.nodes)throw new Error('不是有效的缓存文件（缺少 nodes 字段）');
+  if(data.library){library=data.library;buildIdx();buildChips();buildAffilChips();buildAttrChips();}
+  citationDB=data.citationDB||{};
+  authorDBReady=false;_auBuildPromise=null;
+  if(Object.keys(citationDB).length)setTimeout(()=>startAuthorDBBuild(),1500);
+  gNodes=data.nodes.map(n=>({...n,vx:0,vy:0,fx:null,fy:null}));
+  nMap={};gNodes.forEach(n=>{nMap[n.id]=n;});
+  gEdges=(data.edges||[]).map(e=>{const s=nMap[e.source],t=nMap[e.target];return(s&&t)?{source:s,target:t}:null;}).filter(Boolean);
+  markUnsaved(false);
+  document.getElementById('btn-add').disabled=false;
+  document.getElementById('btn-fetch').disabled=false;
+  applyFilter();
+  restartSim();sim.alpha(0.03).restart();
+  setTimeout(()=>{if(sim)sim.stop();physOn=false;document.getElementById('phybtn').textContent='▶ 继续';fitView();},900);
+  const dbCount=Object.keys(citationDB).length;
+  setTimeout(()=>{syncEdgesFromDB();render();},500);
+  setStatus(`✅ 缓存加载：${gNodes.length} 节点 / ${gEdges.length} 连线 / ${dbCount} 篇有引用数据`);
+  toast('✅ 缓存加载完成');
+}
+
+// ── UTILS ──
+function markUnsaved(v=true){document.getElementById('unsaved').classList.toggle('show',v);}
+function setStatus(m){document.getElementById('status-txt').textContent=m;}
+function showProg(v){document.getElementById('prog-wrap').classList.toggle('show',v);}
+function setProg(d,t){document.getElementById('prog-fill').style.width=(t>0?Math.round(d/t*100):0)+'%';document.getElementById('prog-txt').textContent=t>0?`${typeof d==='number'&&d<t?Math.round(d/t*100)+'%':''}`:'';}
+function shortT(t){const w=(t||'').split(' ');return w.length<=5?t:w.slice(0,5).join(' ');}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+const nd=d=>(d||'').toLowerCase().replace(/\s/g,'');
+const nt=t=>(t||'').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,40);
+function uid(){return Math.random().toString(36).slice(2);}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+function readText(file,cb){const r=new FileReader();r.onload=e=>cb(e.target.result);r.readAsText(file,'utf-8');}
+let _tt;function toast(m){const el=document.getElementById('toast');el.textContent=m;el.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>el.classList.remove('show'),3500);}
+window.addEventListener('beforeunload',e=>{if(document.getElementById('unsaved').classList.contains('show')){e.preventDefault();e.returnValue='';}});
+function resize(){const rp=document.getElementById('right');cv.width=W=rp.clientWidth;cv.height=H=rp.clientHeight;render();}
+window.addEventListener('resize',resize);
+window.onload=()=>{resize();setStatus('请导入文献库或加载缓存文件');};
+
+
+// ══════════════════════════════════════════════════════
+//  FM DETAIL OVERLAY  –  integrated into citation_graph
+// ══════════════════════════════════════════════════════
+
+// ── Shared data ──
+const DP_ICON_OPTIONS = ['💪','⚙️','🔭','🌡️','⚡','📐','🧪','🔬','📊','🏗️','🎯','💡'];
+let dpAttrRegistry = {
+  '力学性能': new Set(['室温拉伸强度','屈服强度','断裂伸长率','硬度','冲击韧性','疲劳强度']),
+  '工艺参数': new Set(['热处理温度','保温时间','冷却速率','变形量']),
+  '扩散参数': new Set(['激活能','扩散系数','扩散温度','Arrhenius前因子']),
+};
+let dpCurrentId = null;  // id of the paper currently open in detail overlay
+let dpBlocks = {};       // current paper's attribute blocks (live copy while editing)
+let _dpModalMode = null; // 'addCat' | 'addSub' | 'editSub'
+let _dpModalTargetBlock = null;
+
+// ── Open / Close overlay ──
+function openDetailOverlay(paperId) {
+  const it = library.find(x => x.id === paperId);
+  if (!it) { toast('该文献不在库中，无法查看详情'); return; }
+  dpCurrentId = paperId;
+  // Deep-clone attr blocks from library (or init empty)
+  dpBlocks = JSON.parse(JSON.stringify(it.dpAttrs || {}));
+  // Merge dpAttrRegistry from library's saved registry
+  if (it.dpAttrRegistry) {
+    for (const [k, v] of Object.entries(it.dpAttrRegistry)) {
+      if (!dpAttrRegistry[k]) dpAttrRegistry[k] = new Set();
+      (Array.isArray(v) ? v : [...v]).forEach(s => dpAttrRegistry[k].add(s));
+    }
+  }
+  dpRenderOverlay(it);
+  document.getElementById('dp-overlay').classList.add('show');
+}
+
+function closeDetailOverlay() {
+  document.getElementById('dp-overlay').classList.remove('show');
+  dpCurrentId = null;
+}
+
+// ── Save: write back to library ──
+function saveDetailOverlay() {
+  if (!dpCurrentId) return;
+  const it = library.find(x => x.id === dpCurrentId);
+  if (!it) return;
+  // Tags
+  const tagSpans = document.querySelectorAll('#dp-tag-wrap .dp-stag');
+  it.tags = [...tagSpans].map(s => s.dataset.tag).filter(Boolean);
+  // Affiliations
+  const clubEls = document.querySelectorAll('#dp-clubs-list .dp-club-badge');
+  it.dpAffiliations = [...clubEls].map(el => ({
+    name: el.dataset.name || '',
+    sub:  el.dataset.sub  || ''
+  })).filter(c => c.name);
+  // Attribute blocks
+  it.dpAttrs = JSON.parse(JSON.stringify(dpBlocks));
+  // Save registry (convert Sets to arrays for JSON serialisation)
+  it.dpAttrRegistry = {};
+  for (const [k, v] of Object.entries(dpAttrRegistry)) {
+    it.dpAttrRegistry[k] = [...v];
+  }
+  // Notes
+  dpSaveNotes();
+  // Update node on canvas if present
+  const n = nMap[dpCurrentId];
+  if (n) { n.tags = it.tags; }
+  markUnsaved();
+  buildChips();buildAffilChips();buildAttrChips();
+  applyFilter();refreshDet();render();
+  toast('✅ 修改已保存');
+}
+
+// ── Render the full overlay ──
+function dpRenderOverlay(it) {
+  const db = citationDB[it.id];
+  const refCount  = db?.refs?.length  || 0;
+  const citeCount = db?.cites?.length || 0;
+  const authCount = (it.authors || []).length;
+  const cited = it.citationCount || (nMap[it.id]?.citationCount) || citationDB[it.id]?.totalCiteCount || 0;
+  // Nav
+  document.getElementById('dp-nav-title').textContent = it.title || '';
+  document.getElementById('dp-nav-subtitle').textContent =
+    [it.journal, it.year, cited ? '被引 ' + cited : ''].filter(Boolean).join(' · ');
+  // Card
+  document.getElementById('dp-card-avatar').textContent = '📄';
+  document.getElementById('dp-card-name').textContent = it.title || '';
+  document.getElementById('dp-card-journal').textContent = it.journal || '';
+  document.getElementById('dp-s-cited').textContent = cited;
+  document.getElementById('dp-s-refs').textContent  = refCount;
+  document.getElementById('dp-s-auth').textContent  = authCount;
+  // Meta
+  document.getElementById('dp-m-authors').textContent = (it.authors||[]).join(', ') || '—';
+  document.getElementById('dp-m-year').textContent    = it.year || '—';
+  document.getElementById('dp-m-journal').textContent = it.journal || '—';
+  const doiEl = document.getElementById('dp-m-doi');
+  doiEl.innerHTML = it.doi
+    ? `<a href="https://doi.org/${esc(it.doi)}" target="_blank">${esc(it.doi)}</a>` : '—';
+  // Tags
+  dpRenderTags(it.tags || []);
+  // Affiliations
+  dpRenderClubs(it.dpAffiliations || []);
+  // Notes
+  dpRenderNotes(it.notes || []);
+  // Attr blocks
+  dpRenderAllBlocks();
+  // Relations
+  dpRenderRelations(it.id, db);
+}
+
+// ── Tags ──
+function dpRenderTags(tags) {
+  const wrap = document.getElementById('dp-tag-wrap');
+  const inp  = document.getElementById('dp-tag-inp');
+  // Remove existing tag spans
+  wrap.querySelectorAll('.dp-stag').forEach(s => s.remove());
+  tags.forEach(t => {
+    const span = document.createElement('span');
+    span.className = 'dp-stag';
+    span.dataset.tag = t;
+    span.innerHTML = `${esc(t)}<span class="dp-tx" onclick="dpRemoveTag(this)">✕</span>`;
+    wrap.insertBefore(span, inp);
+  });
+}
+function dpAddTag(val) {
+  val = val.trim(); if (!val) return;
+  const wrap = document.getElementById('dp-tag-wrap');
+  const inp  = document.getElementById('dp-tag-inp');
+  const span = document.createElement('span');
+  span.className = 'dp-stag';
+  span.dataset.tag = val;
+  span.innerHTML = `${esc(val)}<span class="dp-tx" onclick="dpRemoveTag(this)">✕</span>`;
+  wrap.insertBefore(span, inp);
+}
+function dpRemoveTag(el) { el.closest('.dp-stag').remove(); }
+
+// ── Affiliations / Clubs ──
+function dpRenderClubs(clubs) {
+  const list = document.getElementById('dp-clubs-list');
+  list.innerHTML = clubs.map((c, i) => `
+    <div class="dp-club-badge" data-name="${esc(c.name)}" data-sub="${esc(c.sub||'')}">
+      <div class="dp-club-icon">🔬</div>
+      <div><div class="dp-club-name">${esc(c.name)}</div><div class="dp-club-sub">${esc(c.sub||'')}</div></div>
+      <button class="dp-club-del" onclick="this.closest('.dp-club-badge').remove()">✕</button>
+    </div>`).join('');
+}
+function dpAddAffiliation() {
+  const name = prompt('课题组 / 研究方向名称：');
+  if (!name?.trim()) return;
+  const sub = prompt('副标题（可选，如"多主元合金扩散"）：') || '';
+  const list = document.getElementById('dp-clubs-list');
+  const el = document.createElement('div');
+  el.className = 'dp-club-badge';
+  el.dataset.name = name.trim();
+  el.dataset.sub  = sub.trim();
+  el.innerHTML = `<div class="dp-club-icon">🔬</div>
+    <div><div class="dp-club-name">${esc(name)}</div><div class="dp-club-sub">${esc(sub)}</div></div>
+    <button class="dp-club-del" onclick="this.closest('.dp-club-badge').remove()">✕</button>`;
+  list.appendChild(el);
+}
+
+// ── Notes ──
+function dpRenderNotes(notes) {
+  const list = document.getElementById('dp-notes-list');
+  list.innerHTML = notes.map((n, i) => `
+    <div class="dp-note-item">
+      <div class="dp-note-hdr">
+        <span class="dp-note-idx">笔记 ${i+1}</span>
+        <button class="dp-note-del" onclick="this.closest('.dp-note-item').remove()">✕</button>
+      </div>
+      <textarea class="dp-note-ta">${esc(typeof n==='string'?n:(n.note||n.content||''))}</textarea>
+    </div>`).join('');
+}
+function dpAddNoteField() {
+  const list = document.getElementById('dp-notes-list');
+  const count = list.querySelectorAll('.dp-note-item').length + 1;
+  const el = document.createElement('div');
+  el.className = 'dp-note-item';
+  el.innerHTML = `<div class="dp-note-hdr">
+    <span class="dp-note-idx">笔记 ${count}</span>
+    <button class="dp-note-del" onclick="this.closest('.dp-note-item').remove()">✕</button>
+  </div><textarea class="dp-note-ta" placeholder="在此输入笔记…"></textarea>`;
+  list.appendChild(el);
+  el.querySelector('textarea').focus();
+}
+function dpSaveNotes() {
+  if (!dpCurrentId) return;
+  const it = library.find(x => x.id === dpCurrentId);
+  if (!it) return;
+  it.notes = [...document.querySelectorAll('#dp-notes-list .dp-note-ta')]
+    .map(t => t.value.trim()).filter(Boolean);
+}
+
+// ── Attribute Blocks ──
+function dpRenderAllBlocks() {
+  const mid = document.getElementById('dp-mid');
+  // Remove existing attr blocks (keep empty-hint)
+  mid.querySelectorAll('.dp-attr-block').forEach(el => el.remove());
+  const hint = document.getElementById('dp-empty-hint');
+  const hasBlocks = Object.keys(dpBlocks).length > 0;
+  hint.style.display = hasBlocks ? 'none' : 'block';
+  Object.keys(dpBlocks).forEach(bid => dpRenderBlock(bid));
+}
+
+function dpRenderBlock(bid) {
+  const blk = dpBlocks[bid]; if (!blk) return;
+  const mid = document.getElementById('dp-mid');
+  let blockEl = document.getElementById('dpb-' + bid);
+  if (!blockEl) {
+    blockEl = document.createElement('div');
+    blockEl.className = 'dp-attr-block';
+    blockEl.id = 'dpb-' + bid;
+    mid.appendChild(blockEl);
+  }
+  document.getElementById('dp-empty-hint').style.display = 'none';
+  const subs = blk.subs || [];
+  blockEl.innerHTML = `
+    <div class="dp-attr-block-hdr">
+      <span class="dp-attr-block-icon">${blk.icon||'📄'}</span>
+      <span class="dp-attr-block-name">${esc(blk.name)}</span>
+      <span class="dp-attr-block-cnt">${subs.length} 项</span>
+      <button style="margin-left:8px;background:none;border:none;color:var(--text2);cursor:pointer;font-size:11px"
+        onclick="dpDeleteBlock('${bid}')">✕</button>
+    </div>
+    <div class="dp-attr-block-body">
+      ${subs.length===0?'<div class="dp-ref-empty">暂无子属性</div>':''}
+      ${subs.map(s => dpRenderSubRow(bid, s)).join('')}
+      <button class="dp-add-sub-btn" onclick="dpOpenAddSubModal('${bid}','${esc(blk.name)}')">＋ 添加子属性</button>
+    </div>`;
+}
+
+function dpRenderSubRow(bid, sub) {
+  const numVal = parseFloat(sub.value);
+  const isNum  = sub.type === 'number' && !isNaN(numVal);
+  const barColor = numVal>800?'var(--red)':numVal>400?'var(--gold)':'var(--accent)';
+  const barW  = isNum ? Math.min(numVal/1500*100, 100) : 0;
+  return `<div class="dp-sub-row">
+    <span class="dp-sub-name">${esc(sub.name)}</span>
+    <span class="dp-sub-val ${sub.value?'':'empty'}">${sub.value?esc(sub.value):'—'}</span>
+    ${sub.unit?`<span class="dp-sub-unit">${esc(sub.unit)}</span>`:''}
+    ${isNum?`<div class="dp-rating-bar"><div class="dp-rating-fill" style="width:${barW}%;background:${barColor}"></div></div>`:''}
+    <div class="dp-sub-actions">
+      <button class="dp-sub-edit-btn" onclick="dpEditSub('${bid}','${sub.id}')">编辑</button>
+      <button class="dp-sub-del-btn" onclick="dpDeleteSub('${bid}','${sub.id}')">删除</button>
+    </div>
+  </div>`;
+}
+
+function dpDeleteBlock(bid) {
+  if (!confirm('确认删除此属性类别？')) return;
+  delete dpBlocks[bid];
+  document.getElementById('dpb-'+bid)?.remove();
+  if (Object.keys(dpBlocks).length === 0)
+    document.getElementById('dp-empty-hint').style.display = 'block';
+}
+function dpDeleteSub(bid, subId) {
+  const blk = dpBlocks[bid]; if (!blk) return;
+  blk.subs = blk.subs.filter(s => s.id !== subId);
+  dpRenderBlock(bid);
+}
+
+// ── Relations panel ──
+function dpRenderRelations(paperId, db) {
+  const refs  = db?.refs  || [];
+  const cites = db?.cites || [];
+  document.getElementById('dp-cnt-refs').textContent  = refs.length;
+  document.getElementById('dp-cnt-cites').textContent = cites.length;
+
+  function makeItems(list, maxShow) {
+    if (!list.length) return '<div class="dp-ref-empty">尚未加载数据</div>';
+    const inLib = id => library.some(x => x.id === id);
+    const shown = list.slice(0, maxShow);
+    let html = shown.map(item => {
+      const id    = item.id || '';
+      const title = item.title || item.short || '(无标题)';
+      const year  = item.year  || '';
+      const jnl   = item.journal || '';
+      const cited = item.citationCount || 0;
+      const lib   = inLib(id);
+      return `<div class="dp-ref-item ${lib?'lib':''}"
+        onclick="dpItemClick('${esc(id)}','${esc(item.doi||'')}')">
+        ${lib?'<span class="dp-badge lib">库中</span>':''}
+        ${title}
+        <div class="dp-ref-sub">${[year, jnl, cited?cited+'次被引':''].filter(Boolean).join(' · ')}</div>
+      </div>`;
+    }).join('');
+    if (list.length > maxShow)
+      html += `<button class="dp-show-more" onclick="dpExpandList(this,'${paperId}','${list===refs?'refs':'cites'}')">
+        展示更多 (共 ${list.length})</button>`;
+    return html;
+  }
+  document.getElementById('dp-refs-list').innerHTML  = makeItems(refs,  30);
+  document.getElementById('dp-cites-list').innerHTML = makeItems(cites, 30);
+}
+
+function dpExpandList(btn, paperId, which) {
+  const db   = citationDB[paperId];
+  const list = which === 'refs' ? (db?.refs||[]) : (db?.cites||[]);
+  btn.closest('.dp-rs-sec').querySelector(which==='refs'?'#dp-refs-list':'#dp-cites-list').innerHTML =
+    dpMakeAllItems(list, paperId);
+}
+function dpMakeAllItems(list, paperId) {
+  if (!list.length) return '<div class="dp-ref-empty">无数据</div>';
+  return list.map(item => {
+    const id    = item.id || '';
+    const title = item.title || item.short || '(无标题)';
+    const year  = item.year  || '';
+    const jnl   = item.journal || '';
+    const cited = item.citationCount || 0;
+    const lib   = library.some(x => x.id === id);
+    return `<div class="dp-ref-item ${lib?'lib':''}"
+      onclick="dpItemClick('${esc(id)}','${esc(item.doi||'')}')">
+      ${lib?'<span class="dp-badge lib">库中</span>':''}
+      ${title}
+      <div class="dp-ref-sub">${[year, jnl, cited?cited+'次被引':''].filter(Boolean).join(' · ')}</div>
+    </div>`;
+  }).join('');
+}
+function dpItemClick(id, doi) {
+  // If in library: close overlay and jump to node on canvas
+  const it = library.find(x => x.id === id);
+  if (it) { closeDetailOverlay(); jumpTo(id); return; }
+  if (doi) window.open('https://doi.org/'+doi, '_blank');
+}
+
+// ── Modal ──
+function dpOpenAddCatModal() {
+  _dpModalMode = 'addCat';
+  document.getElementById('dp-modal-title').textContent = '添加属性类别';
+  const catNames = Object.values(dpBlocks).map(b => b.name);
+  const existing = Object.keys(dpAttrRegistry).filter(k => !catNames.includes(k));
+  document.getElementById('dp-modal-body').innerHTML = `
+    <div class="dp-mfield">
+      <label>类别名称</label>
+      <input id="dpm-cat-name" list="dpm-cat-list" placeholder="例：力学性能、微观组织…" autocomplete="off">
+      <datalist id="dpm-cat-list">${existing.map(n=>`<option value="${esc(n)}">`).join('')}</datalist>
+      <div class="dp-mhint">输入新名称，或从已有类别中选择</div>
+    </div>
+    <div class="dp-mfield">
+      <label>图标</label>
+      <select id="dpm-cat-icon">${DP_ICON_OPTIONS.map(i=>`<option value="${i}">${i}</option>`).join('')}</select>
+    </div>`;
+  document.getElementById('dp-modal-confirm-btn').onclick = dpModalConfirm;
+  document.getElementById('dp-modal-overlay').classList.add('show');
+  setTimeout(() => document.getElementById('dpm-cat-name')?.focus(), 50);
+}
+
+function dpOpenAddSubModal(bid, blockName) {
+  _dpModalMode = 'addSub'; _dpModalTargetBlock = bid;
+  document.getElementById('dp-modal-title').textContent = `添加子属性 → ${blockName}`;
+  const subs = [...(dpAttrRegistry[blockName] || [])];
+  document.getElementById('dp-modal-body').innerHTML = `
+    <div class="dp-mfield">
+      <label>子属性名称</label>
+      <input id="dpm-sub-name" list="dpm-sub-list" placeholder="例：室温拉伸强度" autocomplete="off">
+      <datalist id="dpm-sub-list">${subs.map(n=>`<option value="${esc(n)}">`).join('')}</datalist>
+    </div>
+    <div class="dp-mfield"><label>数值</label><input id="dpm-sub-val" placeholder="例：500"></div>
+    <div class="dp-mfield"><label>单位（可选）</label><input id="dpm-sub-unit" placeholder="例：MPa、°C、%"></div>
+    <div class="dp-mfield">
+      <label>数据类型</label>
+      <select id="dpm-sub-type">
+        <option value="text">文本</option>
+        <option value="number">数值（带进度条）</option>
+        <option value="range">范围（如 300~500）</option>
+      </select>
+    </div>`;
+  document.getElementById('dp-modal-confirm-btn').onclick = dpModalConfirm;
+  document.getElementById('dp-modal-overlay').classList.add('show');
+  setTimeout(() => document.getElementById('dpm-sub-name')?.focus(), 50);
+}
+
+function dpEditSub(bid, subId) {
+  const blk = dpBlocks[bid]; if (!blk) return;
+  const sub = blk.subs.find(s => s.id === subId); if (!sub) return;
+  _dpModalMode = 'editSub'; _dpModalTargetBlock = bid;
+  document.getElementById('dp-modal-title').textContent = `编辑子属性 → ${blk.name}`;
+  const subs = [...(dpAttrRegistry[blk.name] || [])];
+  document.getElementById('dp-modal-body').innerHTML = `
+    <div class="dp-mfield"><label>子属性名称</label>
+      <input id="dpm-sub-name" list="dpm-sub-list" value="${esc(sub.name)}">
+      <datalist id="dpm-sub-list">${subs.map(n=>`<option value="${esc(n)}">`).join('')}</datalist></div>
+    <div class="dp-mfield"><label>数值</label><input id="dpm-sub-val" value="${esc(sub.value)}"></div>
+    <div class="dp-mfield"><label>单位</label><input id="dpm-sub-unit" value="${esc(sub.unit||'')}"></div>
+    <div class="dp-mfield"><label>类型</label><select id="dpm-sub-type">
+      <option value="text" ${sub.type==='text'?'selected':''}>文本</option>
+      <option value="number" ${sub.type==='number'?'selected':''}>数值</option>
+      <option value="range" ${sub.type==='range'?'selected':''}>范围</option></select></div>`;
+  document.getElementById('dp-modal-confirm-btn').onclick = () => {
+    sub.name  = (document.getElementById('dpm-sub-name')?.value||'').trim() || sub.name;
+    sub.value = (document.getElementById('dpm-sub-val')?.value||'').trim();
+    sub.unit  = (document.getElementById('dpm-sub-unit')?.value||'').trim();
+    sub.type  = document.getElementById('dpm-sub-type')?.value || 'text';
+    dpRenderBlock(bid); dpCloseModal(); toast('已更新');
+    document.getElementById('dp-modal-confirm-btn').onclick = dpModalConfirm;
+  };
+  document.getElementById('dp-modal-overlay').classList.add('show');
+}
+
+function dpCloseModal() { document.getElementById('dp-modal-overlay').classList.remove('show'); }
+
+function dpModalConfirm() {
+  if (_dpModalMode === 'addCat') {
+    const name = (document.getElementById('dpm-cat-name')?.value||'').trim();
+    const icon = document.getElementById('dpm-cat-icon')?.value || '📄';
+    if (!name) { alert('请输入类别名称'); return; }
+    const bid = 'cat-' + Date.now();
+    dpBlocks[bid] = { id: bid, icon, name, subs: [] };
+    dpRenderBlock(bid);
+    if (!dpAttrRegistry[name]) dpAttrRegistry[name] = new Set();
+    dpCloseModal(); toast(`已添加「${name}」类别`);
+  } else if (_dpModalMode === 'addSub') {
+    const bid  = _dpModalTargetBlock;
+    const name = (document.getElementById('dpm-sub-name')?.value||'').trim();
+    const val  = (document.getElementById('dpm-sub-val')?.value||'').trim();
+    const unit = (document.getElementById('dpm-sub-unit')?.value||'').trim();
+    const type = document.getElementById('dpm-sub-type')?.value || 'text';
+    if (!name) { alert('请输入子属性名称'); return; }
+    const sub = { id: 'sub-'+Date.now(), name, value: val, unit, type };
+    dpBlocks[bid].subs.push(sub);
+    const blk = dpBlocks[bid];
+    if (!dpAttrRegistry[blk.name]) dpAttrRegistry[blk.name] = new Set();
+    dpAttrRegistry[blk.name].add(name);
+    dpRenderBlock(bid); dpCloseModal(); toast(`已添加「${name}」`);
+  }
+}
+
+// ── Patch renderCanvasBtns to include "查看详情" button ──
+const _origRenderCanvasBtns = renderCanvasBtns;
+renderCanvasBtns = function(n) {
+  _origRenderCanvasBtns(n);
+  if (n.inLib !== false) {
+    const existing = document.getElementById('det-canvas-btns').innerHTML;
+    document.getElementById('det-canvas-btns').innerHTML =
+      existing + `<div class="row" style="margin-top:4px">
+        <button class="det-btn" style="background:rgba(79,110,247,.15);color:var(--accent);border-color:var(--accent)"
+          onclick="openDetailOverlay('${n.id}')">📋 查看详情</button>
+      </div>`;
+  }
+};
+
+// ── Patch cache save/load to persist dpAttrs ──
+// (dpAttrs, dpAffiliations, dpAttrRegistry are stored directly on library items,
+//  so they are automatically included in the existing saveCache / loadCache JSON.)
+
+
+// ══════════════════════════════════════════════════════════════════════
+//  ① Affiliation chips
+// ══════════════════════════════════════════════════════════════════════
+function buildAffilChips(){
+  const freq={};
+  library.forEach(it=>(it.dpAffiliations||[]).forEach(a=>{
+    if(a.name)freq[a.name]=(freq[a.name]||0)+1;
+  }));
+  const wrap=document.getElementById('affil-wrap');
+  if(!wrap)return;
+  wrap.innerHTML='';
+  if(!Object.keys(freq).length){wrap.style.display='none';return;}
+  wrap.style.display='flex';
+  Object.entries(freq).sort((a,b)=>b[1]-a[1]).forEach(([name,cnt])=>{
+    const c=document.createElement('span');
+    c.className='affil-chip'+(activeAffils.has(name)?' on':'');
+    c.textContent=`🏟 ${name} (${cnt})`;
+    c.onclick=()=>{
+      activeAffils.has(name)?activeAffils.delete(name):activeAffils.add(name);
+      c.classList.toggle('on',activeAffils.has(name));
+      applyFilter();
+    };
+    wrap.appendChild(c);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  ② Edge toggle + auto-sync
+// ══════════════════════════════════════════════════════════════════════
+function toggleEdges(){
+  showEdges=!showEdges;
+  const btn=document.getElementById('edges-toggle');
+  if(btn){
+    btn.textContent=showEdges?'🔗 连线 开':'🔗 连线 关';
+    btn.style.color=showEdges?'var(--accent)':'var(--text2)';
+    btn.style.borderColor=showEdges?'var(--accent)':'var(--border)';
+  }
+  render();
+}
+
+function syncEdgesFromDB(){
+  if(!Object.keys(citationDB).length)return;
+  const libOnCanvas=gNodes.filter(n=>n.inLib).map(n=>n.id);
+  if(libOnCanvas.length<2)return;
+  const edgeKey=(a,b)=>a<b?a+'||'+b:b+'||'+a;
+  const existing=new Set(gEdges.map(e=>edgeKey(e.source?.id||e.source,e.target?.id||e.target)));
+  const sd=d=>(d||'').toLowerCase().replace(/https?:\/\/doi\.org\//i,'').trim();
+  let added=0;
+  for(let i=0;i<libOnCanvas.length;i++){
+    for(let j=i+1;j<libOnCanvas.length;j++){
+      const a=libOnCanvas[i],b=libOnCanvas[j];
+      const nA=nMap[a],nB=nMap[b];if(!nA||!nB)continue;
+      const dbA=citationDB[a],dbB=citationDB[b];
+      const oaA=dbA?.oaId,oaB=dbB?.oaId;
+      const dA=sd(nA.doi),dB=sd(nB.doi);
+      const ok=
+        (oaB&&dbA?.refs?.some(r=>r.id===oaB))||
+        (dB&&dB.length>4&&dbA?.refs?.some(r=>r.doi&&sd(r.doi)===dB))||
+        (oaA&&dbB?.refs?.some(r=>r.id===oaA))||
+        (dA&&dA.length>4&&dbB?.refs?.some(r=>r.doi&&sd(r.doi)===dA))||
+        (oaB&&dbA?.cites?.some(r=>r.id===oaB))||
+        (oaA&&dbB?.cites?.some(r=>r.id===oaA));
+      const k=edgeKey(a,b);
+      if(ok&&!existing.has(k)){gEdges.push({source:nA,target:nB});existing.add(k);added++;}
+    }
+  }
+  if(added>0){restartSim();sim.alpha(0.05).restart();setTimeout(()=>render(),200);toast('🔗 连接 '+added+' 条引用关系');}
+  setStatus('🔗 '+gEdges.length+' 条连线（库文献 '+libOnCanvas.length+' 篇画布上）');
+}
+
+
+// ══════════════════════════════════════════════════════════════════════
+//  ③ Meta-cache (small file, no citationDB)
+// ══════════════════════════════════════════════════════════════════════
+function saveMetaCache(){
+  if(!library.length){toast('文献库为空，无数据可保存');return;}
+  const meta={
+    type:'meta_cache',version:2,
+    savedAt:new Date().toISOString(),
+    // v2: full library content (title, authors, year, journal + all metadata)
+    library:library.map(function(it){return{
+      id:it.id,title:it.title||'',
+      authors:it.authors||[],
+      year:it.year||'',
+      journal:it.journal||'',
+      doi:it.doi||'',
+      tags:it.tags||[],
+      notes:it.notes||[],
+      dpAttrs:it.dpAttrs||{},
+      dpAffiliations:it.dpAffiliations||[],
+      dpAttrRegistry:it.dpAttrRegistry||{},
+      oaAuthorships:it.oaAuthorships||[],
+    };}),
+    canvasPositions:gNodes.filter(function(n){return n.inLib;})
+      .map(function(n){return{id:n.id,x:Math.round(n.x||0),y:Math.round(n.y||0)};}),
+    authorDB:authorDBReady?Object.fromEntries(Object.entries(authorMap).map(function(entry){
+      var k=entry[0],v=entry[1];
+      return[k,{id:v.id,name:v.name,orcid:v.orcid,institution:v.institution,
+        libPaperIds:v.libPapers.map(function(p){return p.id;}),
+        extPapers:v.extPapers.slice(0,30)}];
+    })):null,
+  };
+  var json=JSON.stringify(meta);
+  var blob=new Blob([json],{type:'application/json'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;
+  a.download='library_'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},5000);
+  var kb=Math.round(json.length/1024);
+  markUnsaved(false);
+  toast('✅ 文献库已保存（'+library.length+' 篇，'+(kb<1024?kb+' KB':(kb/1024).toFixed(1)+' MB')+')');
+}
+
+function loadMetaCacheFile(e){
+  var f=e.target.files[0];e.target.value='';if(!f)return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      var data=JSON.parse(ev.target.result);
+      if(data.type!=='meta_cache'){toast('❌ 不是文献库文件');return;}
+
+      var added=0,updated=0;
+
+      if(data.version>=2&&data.library&&data.library.length){
+        // v2: full library — restore all papers (including manually added ones)
+        var existingIds=new Set(library.map(function(x){return x.id;}));
+        var existingDOIs=new Set(library.map(function(x){return nd(x.doi||'');}).filter(Boolean));
+        data.library.forEach(function(item){
+          // Check if already exists
+          if(existingIds.has(item.id))return;
+          if(item.doi&&existingDOIs.has(nd(item.doi)))return;
+          library.push({
+            id:item.id,title:item.title||'',authors:item.authors||[],
+            year:item.year||'',journal:item.journal||'',doi:item.doi||'',
+            tags:item.tags||[],notes:item.notes||[],
+            dpAttrs:item.dpAttrs||{},dpAffiliations:item.dpAffiliations||[],
+            dpAttrRegistry:item.dpAttrRegistry||{},
+            oaAuthorships:item.oaAuthorships||[],
+          });
+          existingIds.add(item.id);
+          added++;
+        });
+        // Also update metadata of existing papers
+        data.library.forEach(function(item){
+          var it=library.find(function(x){
+            return x.id===item.id||(item.doi&&x.doi&&nd(x.doi)===nd(item.doi));
+          });
+          if(!it)return;
+          if(item.tags&&item.tags.length)it.tags=item.tags;
+          if(item.notes&&item.notes.length)it.notes=item.notes;
+          if(item.dpAttrs&&Object.keys(item.dpAttrs).length)it.dpAttrs=item.dpAttrs;
+          if(item.dpAffiliations&&item.dpAffiliations.length)it.dpAffiliations=item.dpAffiliations;
+          if(item.dpAttrRegistry&&Object.keys(item.dpAttrRegistry).length)it.dpAttrRegistry=item.dpAttrRegistry;
+          if(item.oaAuthorships&&item.oaAuthorships.length)it.oaAuthorships=item.oaAuthorships;
+          updated++;
+        });
+        if(added>0){
+          buildIdx();buildChips();applyFilter();invalidateAuthorDB();
+          document.getElementById('btn-add').disabled=false;
+          document.getElementById('btn-fetch').disabled=false;
+        }
+      } else {
+        // v1 backward compat: update metadata only
+        (data.libraryMeta||[]).forEach(function(meta){
+          var it=library.find(function(x){
+            return x.id===meta.id||(meta.doi&&x.doi&&nd(x.doi)===nd(meta.doi));
+          });
+          if(!it)return;
+          if(meta.tags)it.tags=meta.tags;
+          if(meta.notes)it.notes=meta.notes;
+          if(meta.dpAttrs)it.dpAttrs=meta.dpAttrs;
+          if(meta.dpAffiliations)it.dpAffiliations=meta.dpAffiliations;
+          if(meta.dpAttrRegistry)it.dpAttrRegistry=meta.dpAttrRegistry;
+          if(meta.oaAuthorships)it.oaAuthorships=meta.oaAuthorships;
+          updated++;
+        });
+      }
+
+      // Restore canvas positions
+      (data.canvasPositions||[]).forEach(function(p){
+        var n=nMap[p.id];if(n){n.x=p.x;n.y=p.y;}
+      });
+
+      // Restore author DB if available
+      if(data.authorDB){
+        authorMap={};
+        Object.entries(data.authorDB).forEach(function(entry){
+          var k=entry[0],v=entry[1];
+          var libPapers=(v.libPaperIds||[]).map(function(id){
+            var it=library.find(function(x){return x.id===id;});
+            return it?{id:it.id,title:it.title,year:it.year,journal:it.journal,doi:it.doi}:null;
+          }).filter(Boolean);
+          authorMap[k]={id:v.id,name:v.name,orcid:v.orcid,institution:v.institution,
+            libPapers:libPapers,extPapers:v.extPapers||[]};
+        });
+        auSortedList=Object.values(authorMap).sort(function(a,b){
+          var d=b.libPapers.length-a.libPapers.length;
+          return d||((b.libPapers.length+b.extPapers.length)-(a.libPapers.length+a.extPapers.length));
+        });
+        authorDBReady=true;
+      } else {
+        authorDBReady=false;_auBuildPromise=null;
+      }
+
+      setTimeout(function(){syncEdgesFromDB();render();},300);
+      buildChips();applyFilter();render();
+      markUnsaved(false);
+      var msg='✅ 文献库已加载';
+      if(added>0)msg+='（新增 '+added+' 篇';
+      if(updated>0)msg+=(added>0?'，':'（')+'更新 '+updated+' 篇';
+      if(added>0||updated>0)msg+=')';
+      if(data.authorDB)msg+='，'+Object.keys(authorMap).length+' 位作者已恢复';
+      toast(msg);
+    }catch(err){toast('❌ 解析失败: '+err.message);console.error(err);}
+  };
+  reader.readAsText(f);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  ④ Author system – OA-ID based disambiguation
+// ══════════════════════════════════════════════════════════════════════
+let authorMap={};       // key = OA author ID (e.g. "A1234567890") or "name:Wei Zhang"
+let auSortedList=[];    // [{id,name,orcid,institution,libPapers,extPapers,coauthors}]
+let auCurId=null;       // currently displayed author ID
+let auFilterMode='all'; // 'all'|'lib'|'multi'
+
+// ── Author Map: dedup + chunked + background build ──
+let authorDBReady=false;
+let _auBuildPromise=null;
+
+
+// ── Delete a library item ──
+function deleteLibItem(id, skipConfirm){
+  if(!skipConfirm && !confirm('确认从文献库中删除这篇文章？\n（画布节点和引用数据也会一并移除）')) return;
+  const idx2=library.findIndex(x=>x.id===id);
+  if(idx2!==-1)library.splice(idx2,1);
+  if(nMap[id]){
+    gEdges=gEdges.filter(e=>{const s=(e.source?.id||e.source),t=(e.target?.id||e.target);return s!==id&&t!==id;});
+    gNodes=gNodes.filter(n=>n.id!==id);
+    delete nMap[id];
+    if(sim)sim.nodes(gNodes);
+  }
+  delete citationDB[id];
+  buildIdx();buildChips();buildAffilChips();
+  applyFilter();invalidateAuthorDB();
+  restartSim();render();markUnsaved();
+  if(detNode&&detNode.id===id){document.getElementById('det').classList.remove('open');detNode=null;}
+  if(typeof dpCurrentId!=='undefined'&&dpCurrentId===id)closeDetailOverlay();
+  toast('🗑 已删除');
+}
+
+function invalidateAuthorDB(){
+  authorDBReady=false;
+  _auBuildPromise=null;
+  startAuthorDBBuild();
+}
+
+
+function startAuthorDBBuild(){
+  if(_auBuildPromise)return _auBuildPromise;
+  authorDBReady=false;
+  _auBuildPromise=_doBuildAuthorMap().then(()=>{
+    authorDBReady=true;_auBuildPromise=null;
+    window._auTmpMap=null;
+    if(document.getElementById('au-overlay').classList.contains('show')){
+      auShowContent();
+      if(auCurId){
+        // After reconciliation, name:-key may have been merged into OA-ID key
+        if(auCurId.startsWith('name:')&&!authorMap[auCurId]){
+          const nm=auCurId.slice(5);
+          const found=Object.keys(authorMap).find(k=>authorMap[k].name.toLowerCase().trim()===nm);
+          if(found)auCurId=found;
+        }
+        openAuthorDetail(auCurId);
+      }
+    }
+    setStatus(`✅ 作者索引就绪（${Object.keys(authorMap).length} 位作者）`);
+  });
+  return _auBuildPromise;
+}
+
+function buildCoreDB(){
+  coreDB={};
+  const libOASet=new Set(Object.values(citationDB).map(d=>d.oaId).filter(Boolean));
+  const refFreq={};
+  Object.values(citationDB).forEach(function(db){
+    (db.refs||[]).forEach(function(w){
+      if(!w.id||libOASet.has(w.id))return;
+      refFreq[w.id]=(refFreq[w.id]||0)+1;
+      if(!coreDB[w.id])coreDB[w.id]=w;
+    });
+    (db.cites||[]).forEach(function(w){
+      if(!w.id||libOASet.has(w.id)||coreDB[w.id])return;
+      if((w.cited_by_count||0)>=5)coreDB[w.id]=w;
+    });
+  });
+  Object.keys(coreDB).forEach(function(id){
+    var w=coreDB[id];
+    if((refFreq[id]||0)<2&&(w.cited_by_count||0)<5)delete coreDB[id];
+  });
+  setStatus("常用库 "+Object.keys(coreDB).length+" 篇");
+  return Object.keys(coreDB).length;
+}
+
+async function _doBuildAuthorMap(){
+  authorMap={};
+  library.forEach(function(it){
+    var paper={id:it.id,title:it.title,year:it.year,journal:it.journal,doi:it.doi};
+    if(it.oaAuthorships&&it.oaAuthorships.length)
+      it.oaAuthorships.forEach(function(a){_auAdd(a.id,a.name,a.orcid,a.institution,paper,true);});
+    else (it.authors||[]).forEach(function(n){_auAdd(null,n,"","",paper,true);});
+  });
+  if(!Object.keys(coreDB).length)buildCoreDB();
+  var _libDOISet=new Set(library.map(function(it){return(it.doi||"").toLowerCase().replace("https://doi.org/","").trim();}).filter(Boolean));
+  var _libOASet=new Set(library.map(function(it){return(it.url||it.openAlexId||"").replace("https://openalex.org/","");}).filter(Boolean));
+  var works=Object.values(coreDB),total=works.length;
+  var CHUNK=400;
+  for(var i=0;i<total;i+=CHUNK){
+    var end=Math.min(i+CHUNK,total);
+    for(var j=i;j<end;j++){
+      var w=works[j];
+      if(!w.authorships||!w.authorships.length)continue;
+      var doi=(w.doi||"").replace("https://doi.org/","");
+      var _oaS=(w.id||"").replace("https://openalex.org/","");
+      if((doi&&_libDOISet.has(doi.toLowerCase()))||(_oaS&&_libOASet.has(_oaS)))continue;
+      var paper={id:w.id,title:(w.title||"").slice(0,160),
+        year:String(w.publication_year||""),
+        journal:(w.primary_location&&w.primary_location.source&&w.primary_location.source.display_name||"").slice(0,80),
+        doi:doi,citationCount:w.cited_by_count||0};
+      w.authorships.forEach(function(a){
+        if(!a.author||!a.author.id)return;
+        _auAdd(a.author.id.replace("https://openalex.org/",""),a.author.display_name||"",
+          a.author.orcid||"",(a.institutions&&a.institutions[0]&&a.institutions[0].display_name)||"",paper,false);
+      });
+    }
+    var pct=Math.round(end/total*100);
+    setStatus("作者索引 "+pct+"% ("+end+"/"+total+" 常用库)");
+    var auOv=document.getElementById("au-overlay");
+    if(auOv&&auOv.classList.contains("show")){
+      var sub=document.getElementById("au-subtitle");
+      if(sub)sub.textContent="建立作者索引 "+pct+"% ("+end+"/"+total+")";
+      var ar=document.getElementById("au-right");
+      if(ar&&!ar.querySelector(".au-det-name")){
+        ar.innerHTML="";
+        var wrap=document.createElement("div");wrap.style.cssText="padding:30px 20px;text-align:center";
+        var lbl=document.createElement("div");lbl.style.cssText="font-size:13px;color:var(--text2);margin-bottom:16px";
+        lbl.textContent="建立作者索引（常用库 "+total+" 篇）";
+        var track=document.createElement("div");track.style.cssText="background:var(--panel2);border-radius:6px;height:8px;max-width:300px;margin:0 auto;overflow:hidden";
+        var fill=document.createElement("div");fill.style.cssText="height:100%;background:var(--accent);border-radius:6px;width:"+pct+"%";
+        track.appendChild(fill);
+        var cnt=document.createElement("div");cnt.style.cssText="font-size:11px;color:var(--text3);margin-top:10px";
+        cnt.textContent=end+" / "+total+" 篇";
+        wrap.appendChild(lbl);wrap.appendChild(track);wrap.appendChild(cnt);ar.appendChild(wrap);
+      }
+    }
+    await sleep(15);
+  }
+  // Phase 3: Reconcile name-based entries with OA-ID entries
+  function _tok(n){return n.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]/g," ").trim().split(/\s+/).filter(Boolean).sort().join("|");}
+  var oaByTok={};
+  Object.keys(authorMap).forEach(function(k){
+    if(!k.startsWith("name:")){
+      var t=_tok(authorMap[k].name);
+      if(t&&!oaByTok[t])oaByTok[t]=k;
+    }
+  });
+  Object.keys(authorMap).filter(function(k){return k.startsWith("name:");}).forEach(function(nk){
+    var t=_tok(authorMap[nk].name);
+    var ok=t?oaByTok[t]:null;
+    if(ok&&authorMap[ok]){
+      authorMap[nk].libPapers.forEach(function(p){if(!authorMap[ok].libPapers.find(function(x){return x.id===p.id;}))authorMap[ok].libPapers.push(p);});
+      authorMap[nk].extPapers.forEach(function(p){if(!authorMap[ok].extPapers.find(function(x){return x.id===p.id;}))authorMap[ok].extPapers.push(p);});
+      delete authorMap[nk];
+    }
+  });
+  // Phase 4: threshold
+  Object.keys(authorMap).forEach(function(k){
+    var a=authorMap[k];
+    if(!a.libPapers.length&&a.extPapers.length<5)delete authorMap[k];
+  });
+  auSortedList=Object.values(authorMap).sort(function(a,b){
+    var d=b.libPapers.length-a.libPapers.length;
+    return d||(b.extPapers.length-a.extPapers.length);
+  });
+}
+
+function _auAdd(authorId,authorName,orcid,institution,paper,isLib){
+  const key=authorId||'name:'+authorName.toLowerCase().trim();
+  if(!key||key==='name:')return;
+  if(!authorMap[key])authorMap[key]={id:authorId||null,name:authorName||'',orcid:orcid||'',institution:institution||'',libPapers:[],extPapers:[]};
+  const e=authorMap[key];
+  if(authorId&&!e.id)e.id=authorId;
+  if(orcid&&!e.orcid)e.orcid=orcid;
+  if(institution&&!e.institution)e.institution=institution;
+  (isLib?e.libPapers:e.extPapers).some(p=>p.id===paper.id)||((isLib?e.libPapers:e.extPapers).push(paper));
+}
+
+async function enrichAuthorIds(){
+  const toEnrich=library.filter(it=>!it.oaAuthorships);
+  if(!toEnrich.length){toast('所有文献已有作者ID数据');return;}
+  const btn=document.getElementById('btn-enrich');
+  if(btn){btn.disabled=true;btn.textContent='⏳ 补全中…';}
+  showProg(true);let done=0;
+  for(const it of toEnrich){
+    const url=it.doi
+      ?'https://api.openalex.org/works/doi:'+encodeURIComponent(it.doi)+'?select=id,authorships'
+      :'https://api.openalex.org/works?filter=title.search:'+encodeURIComponent((it.title||'').slice(0,80))+'&per_page=1&select=id,authorships';
+    try{
+      const r=await fetch(url);if(!r.ok){done++;setProg(done,toEnrich.length);continue;}
+      const d=await r.json();
+      const w=d.id?d:d.results?.[0];
+      if(w?.authorships?.length){
+        it.oaAuthorships=(w.authorships||[]).map(a=>({
+          id:(a.author?.id||'').replace('https://openalex.org/',''),
+          name:a.author?.display_name||'',
+          orcid:a.author?.orcid||'',
+          institution:(a.institutions||[])[0]?.display_name||''
+        }));
+      }
+    }catch(_){}
+    done++;setProg(done,toEnrich.length);
+    setStatus('🔬 补全作者ID '+done+'/'+toEnrich.length+'：'+shortT(it.title));
+    await sleep(120);
+  }
+  showProg(false);
+  if(btn){btn.disabled=false;btn.textContent='🔬 补全作者ID';}
+  markUnsaved();
+  authorDBReady=false;_auBuildPromise=null;
+  startAuthorDBBuild();
+  toast('✅ 补全完成，'+toEnrich.length+' 篇已处理');
+}
+
+async function openAuthorOverlay(authorKey){
+  if(window._authorDBNeedsRefresh){invalidateAuthorDB();window._authorDBNeedsRefresh=false;}
+  document.getElementById('au-overlay').classList.add('show');
+  if(authorDBReady){auShowContent();return;}
+  // Show library-only authors immediately (instant)
+  _auRenderLibraryOnly();
+  if(!_auBuildPromise)startAuthorDBBuild();
+}
+
+function _auRenderLibraryOnly(){
+  const tmpMap={};
+  library.forEach(it=>{
+    const paper={id:it.id,title:it.title,year:it.year,journal:it.journal,doi:it.doi};
+    const authors=it.oaAuthorships?.length?it.oaAuthorships.map(a=>({key:a.id||'name:'+a.name.toLowerCase().trim(),name:a.name,id:a.id||null,orcid:a.orcid})):
+      (it.authors||[]).map(n=>({key:'name:'+n.toLowerCase().trim(),name:n,id:null,orcid:''}));
+    authors.forEach(a=>{if(!a.key||a.key==='name:')return;
+      if(!tmpMap[a.key])tmpMap[a.key]={name:a.name,id:a.id,orcid:a.orcid,libPapers:[]};
+      if(!tmpMap[a.key].libPapers.some(p=>p.id===paper.id))tmpMap[a.key].libPapers.push(paper);});
+  });
+  const tmpList=Object.values(tmpMap).sort((a,b)=>b.libPapers.length-a.libPapers.length);
+  auFilterMode='lib';
+  document.querySelectorAll('.au-fchip').forEach(c=>c.classList.remove('on'));
+  document.getElementById('au-f-lib')?.classList.add('on');
+  window._auTmpMap=tmpMap;  
+  document.getElementById('au-subtitle').innerHTML=
+    `<span style="color:var(--text2)">⏳ 外部索引建立中 — 库中 ${tmpList.length} 位作者已可浏览</span>`;
+  document.getElementById('au-list').innerHTML=tmpList.slice(0,300).map(a=>{
+    const k=a.id||'name:'+a.name.toLowerCase().trim();
+    return`<div class="au-item" onclick="openAuthorDetail('${esc(k)}')">
+      <div class="au-item-name">${esc(a.name)}</div>
+      <div class="au-item-meta"><span class="au-badge lib">库中 ${a.libPapers.length}</span>${a.orcid?'<span class="au-badge orcid">ORCID</span>':''}</div>
+    </div>`;}).join('');
+  document.getElementById('au-right').innerHTML=
+    `<div style="text-align:center;padding:40px 20px;color:var(--text2)">
+      <div style="font-size:14px;margin-bottom:8px">⏳ 外部文献索引建立中…</div>
+      <div style="font-size:11px;color:var(--text3)">可先浏览库中作者；外部索引完成后自动刷新</div>
+    </div>`;
+}
+
+
+function auShowContent(){
+  const withOA=library.filter(x=>x.oaAuthorships?.length).length;
+  document.getElementById('au-subtitle').innerHTML=withOA<library.length
+    ?`<span style="color:var(--gold)">⚠ ${library.length-withOA} 篇未有OA作者ID（「🔬 补全」后更精准）</span>`
+    :`<span style="color:var(--green)">✅ 全部文献已有作者ID</span>`;
+  auFilterMode='all';
+  document.querySelectorAll('.au-fchip').forEach(c=>c.classList.remove('on'));
+  document.getElementById('au-f-all')?.classList.add('on');
+  auRenderList(auGetFiltered());
+}
+function closeAuthorOverlay(){
+  document.getElementById('au-overlay').classList.remove('show');
+  auCurId=null;
+}
+
+function auSetFilter(mode){
+  auFilterMode=mode;
+  document.querySelectorAll('.au-fchip').forEach(c=>c.classList.remove('on'));
+  document.getElementById('au-f-'+mode)?.classList.add('on');
+  auRenderList(auGetFiltered());
+}
+function auGetFiltered(){
+  const q=(document.getElementById('au-srch-inp')?.value||'').toLowerCase().trim();
+  return auSortedList.filter(a=>{
+    if(q&&!a.name.toLowerCase().includes(q))return false;
+    if(auFilterMode==='lib'&&!a.libPapers.length)return false;
+    if(auFilterMode==='multi'&&(a.libPapers.length+a.extPapers.length)<2)return false;
+    return true;
+  });
+}
+function auFilter(q){auRenderList(auGetFiltered());}
+
+function auRenderList(list){
+  const el=document.getElementById('au-list');
+  document.getElementById('au-subtitle').textContent=
+    document.getElementById('au-subtitle').textContent; // keep hint
+  if(!list.length){el.innerHTML='<div style="color:var(--text3);padding:16px;text-align:center;font-size:11px">无结果</div>';return;}
+  el.innerHTML=list.map(a=>{
+    const key=a.id||'name:'+a.name.toLowerCase().trim();
+    const total=a.libPapers.length+a.extPapers.length;
+    const hasOA=!!a.id;
+    return `<div class="au-item${auCurId===key?' sel':''}" onclick="openAuthorDetail('${esc(key)}')">
+      <div class="au-item-name">${esc(a.name)}</div>
+      <div class="au-item-meta">
+        ${a.libPapers.length?`<span class="au-badge lib">库中 ${a.libPapers.length}</span>`:''}
+        ${a.extPapers.length?`<span class="au-badge ext">外部 ${a.extPapers.length}</span>`:''}
+        ${a.orcid?`<span class="au-badge orcid">ORCID</span>`:''}
+        ${!hasOA?`<span style="color:var(--text3);font-size:9px">（仅姓名匹配）</span>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  requestAnimationFrame(function(){var sel=document.getElementById("au-list").querySelector(".au-item.sel");if(sel)sel.scrollIntoView({block:"nearest",behavior:"smooth"});});
+}
+
+function openAuthorDetail(key){
+  if(key.startsWith('name:')&&!authorMap[key]&&!((window._auTmpMap||{})[key])){
+    var nm=key.slice(5);
+    var fd=Object.entries(authorMap).find(function(e){return e[1].name.toLowerCase().trim()===nm;});
+    if(fd)key=fd[0];
+  }
+  auCurId=key;
+  auRenderList(auGetFiltered()); // update active state
+  const a=authorMap[key]||(window._auTmpMap&&window._auTmpMap[key])||null;if(!a)return;  
+  const total=a.libPapers.length+a.extPapers.length;
+
+  // Build co-author set from library papers (using OA IDs where possible)
+  const coMap={};
+  a.libPapers.forEach(p=>{
+    const it=library.find(x=>x.id===p.id);if(!it)return;
+    if(it.oaAuthorships?.length){
+      it.oaAuthorships.forEach(co=>{
+        const coKey=co.id||'name:'+co.name.toLowerCase().trim();
+        if(coKey!==key&&!coMap[coKey])coMap[coKey]={name:co.name,id:co.id||null};
+      });
+    } else {
+      (it.authors||[]).forEach(name=>{
+        const coKey='name:'+name.toLowerCase().trim();
+        if(coKey!==key&&!coMap[coKey])coMap[coKey]={name:name,id:null};
+      });
+    }
+  });
+  const coAuthors=Object.values(coMap).slice(0,24);
+
+  const idBadge=a.id
+    ?`<a href="https://openalex.org/authors/${a.id}" target="_blank" style="color:var(--accent);font-size:10px;text-decoration:none">OA: ${a.id}</a>`
+    :'<span style="color:var(--text3);font-size:10px">⚠ 仅姓名匹配，点「🔬 补全作者ID」提升准确度</span>';
+  const orcidBadge=a.orcid
+    ?`<a href="${a.orcid}" target="_blank" style="color:#a6d200;font-size:10px">ORCID ↗</a>`:'';
+
+  const libHTML=a.libPapers.map(p=>
+    `<div class="au-paper lib" onclick="auClickPaper('${esc(p.id)}','${esc(p.doi||'')}')">
+      <div class="au-paper-title">${esc(p.title||'(无标题)')}</div>
+      <div class="au-paper-meta">${[p.year,p.journal].filter(Boolean).join(' · ')} <span class="au-badge lib">库中</span></div>
+    </div>`).join('');
+  window._auExtPapers=a.extPapers;
+  var extHTML=a.extPapers.map(function(p,_ei){
+    var _doi=(p.doi||"").replace(/'/g,"");
+    var _inLib=!!(p.doi&&libDOI.get(nd(p.doi||"")));
+    var _meta=[p.year,p.journal,p.citationCount?p.citationCount+"次被引":""].filter(Boolean).join(" · ");
+    var _addBtn=_inLib
+      ?"<span class=\"au-badge lib\">库中</span>"
+      :"<button class=\"au-add-btn\" title=\"添加\""       +" onclick=\"event.stopPropagation();addOAPaperToLib(window._auExtPapers["+_ei+"],this.parentElement,this)\">＋</button>";
+    return "<div class=\"au-paper au-addable"+(_inLib?" lib":"")+"\" style=\"position:relative\""
+      +" onclick=\"auClickPaper('','"+_doi+"')\">"      +_addBtn
+      +"<div class=\"au-paper-title\">"+esc(p.title||"(无标题)")+"</div>"
+      +"<div class=\"au-paper-meta\">"+_meta+"</div>"
+      +"</div>";
+  }).join("")
+
+  document.getElementById('au-right').innerHTML=`
+    <div class="au-det-name">👤 ${esc(a.name)}</div>
+    <div class="au-det-meta">
+      ${a.institution?`🏛 ${esc(a.institution)}　`:''}
+      ${idBadge} ${orcidBadge?'　'+orcidBadge:''}
+    </div>
+    <div class="au-stats">
+      <div class="au-stat"><div class="au-stat-v">${total}</div><div class="au-stat-l">总文章</div></div>
+      <div class="au-stat"><div class="au-stat-v" style="color:var(--green)">${a.libPapers.length}</div><div class="au-stat-l">库中</div></div>
+      <div class="au-stat"><div class="au-stat-v" style="color:var(--text2)">${a.extPapers.length}</div><div class="au-stat-l">外部引用库</div></div>
+    </div>
+    ${coAuthors.length?`<div class="au-sec">🤝 合作者 (${coAuthors.length})</div>
+    <div class="au-coauthor-wrap">
+      ${coAuthors.map(co=>`<span class="au-coauthor" onclick="openAuthorDetail('${esc(co.id||'name:'+co.name.toLowerCase().trim())}')">${esc(co.name)}</span>`).join('')}
+    </div>`:''}
+    ${libHTML?`<div class="au-sec" style="color:var(--green)">📗 库中文献 (${a.libPapers.length})</div>${libHTML}`:''}
+    ${extHTML?`<div class="au-sec">📄 引用/被引库中文献 (${a.extPapers.length})</div>${extHTML}`:''}
+  `;
+  (function(){
+    var auR=document.getElementById('au-right');
+    var sec=document.createElement('div');sec.style.padding='0 0 20px 0';
+    var lbl=document.createElement('div');lbl.className='au-sec';lbl.style.marginTop='16px';
+    lbl.textContent='📚 OpenAlex 完整发表列表';sec.appendChild(lbl);
+    if(a.id){
+      var fb=document.createElement('button');fb.className='fetch-btn';fb.textContent='📥 获取完整列表（OA）';
+      var rc=document.createElement('div');rc.style.marginTop='6px';
+      fb.onclick=function(){_auFetchOAPapers(a.id,rc,fb);};
+      sec.appendChild(fb);sec.appendChild(rc);
+    }else{
+      var nm2=document.createElement('div');nm2.style.cssText='color:var(--text3);font-size:11px;padding:8px 0';
+      nm2.textContent='无OA作者ID，请先运行「🔬 补全作者ID」';sec.appendChild(nm2);
+    }
+    auR.appendChild(sec);
+  })();
+}
+
+async function _auFetchOAPapers(oaId,container,btn){
+  if(!oaId||!container)return;
+  if(btn){btn.disabled=true;btn.textContent="获取中...";}
+  var PER=200,MAX=2000;
+  var BASE="https://api.openalex.org/works?filter=author.id:"+encodeURIComponent(oaId)
+    +"&sort=cited_by_count:desc&per_page="+PER
+    +"&select=id,title,publication_year,primary_location,cited_by_count,doi,authorships";
+  try{
+    var resp=await fetch(BASE+"&page=1");
+    if(!resp.ok)throw new Error("HTTP "+resp.status);
+    var data=await resp.json();
+    var works=data.results||[];
+    var tot=(data.meta&&data.meta.count)||works.length;
+    var totalPages=Math.ceil(Math.min(tot,MAX)/PER);
+    if(btn)btn.remove();
+    if(!works.length){
+      var m0=document.createElement("div");
+      m0.style.cssText="color:var(--text3);font-size:11px;padding:6px";
+      m0.textContent="OpenAlex 无结果";container.appendChild(m0);return;
+    }
+    var hdr=document.createElement("div");
+    hdr.style.cssText="font-size:10px;color:var(--text2);margin-bottom:6px";
+    hdr.textContent="共 "+tot+" 篇，加载中...";
+    container.appendChild(hdr);
+    for(var pg=2;pg<=totalPages;pg++){
+      await sleep(120);
+      var r2=await fetch(BASE+"&page="+pg);
+      if(!r2.ok)break;
+      var d2=await r2.json();
+      works=works.concat(d2.results||[]);
+      hdr.textContent="共 "+tot+" 篇，已加载 "+works.length+"...";
+    }
+    hdr.textContent="共 "+tot+" 篇"+(works.length<tot
+      ?"(已加载 "+works.length+" 篇)"
+      :",全部加载完毕");
+    window._auOAWorks=works;
+    works.forEach(function(w,idx){
+      var doi=(w.doi||"").replace("https://doi.org/","");
+      var libIt=doi?libDOI.get(nd(doi)):null;
+      var inLib=!!libIt;
+      var el=document.createElement("div");
+      el.className="au-paper au-addable"+(inLib?" lib":"");
+      el.style.position="relative";
+      var te=document.createElement("div");te.className="au-paper-title";
+      te.textContent=(w.title||"").slice(0,140);
+      var me=document.createElement("div");me.className="au-paper-meta";
+      var pts=[];
+      if(w.publication_year)pts.push(String(w.publication_year));
+      var src=w.primary_location&&w.primary_location.source&&w.primary_location.source.display_name;
+      if(src)pts.push(src.slice(0,50));
+      if(w.cited_by_count)pts.push(w.cited_by_count+"次被引");
+      me.textContent=pts.join(" · ");
+      if(inLib){
+        var bge=document.createElement("span");
+        bge.className="au-badge lib";bge.textContent="库中";me.appendChild(bge);
+      }else{
+        var addb=document.createElement("button");
+        addb.className="au-add-btn";
+        addb.title="添加到我的文献库";
+        addb.textContent="+";
+        addb.onclick=(function(widx,eel,eaddb){
+          return function(ev){ev.stopPropagation();
+            addOAPaperToLib(window._auOAWorks[widx],eel,eaddb);};
+        })(idx,el,addb);
+        el.appendChild(addb);
+      }
+      el.appendChild(te);el.appendChild(me);
+      var cid=libIt?libIt.id:"";
+      el.onclick=(function(wcid,wdoi,winLib){
+        return function(){if(winLib)auClickPaper(wcid,wdoi);};
+      })(cid,doi,inLib);
+      container.appendChild(el);
+    });
+  }catch(err){
+    var m1=document.createElement("div");
+    m1.style.cssText="color:var(--red);font-size:11px;padding:6px";
+    m1.textContent="获取失败: "+err.message;
+    container.appendChild(m1);
+    if(btn){btn.disabled=false;btn.textContent="重试";}
+  }
+}
+
+function auClickPaper(id,doi){
+  if(id&&library.find(x=>x.id===id)){closeAuthorOverlay();jumpTo(id);return;}
+  if(doi)window.open('https://doi.org/'+doi,'_blank');
+}
+
+// Clicking author name in right-panel opens overlay
+
+
+function auClickAuthorName(rawName){
+  let key=null;
+  if(detNode){
+    const it=library.find(x=>x.id===detNode.id);
+    if(it?.oaAuthorships){
+      const hit=it.oaAuthorships.find(a=>a.name===rawName);
+      if(hit&&hit.id)key=hit.id;
+    }
+  }
+  if(!key)key='name:'+rawName.toLowerCase().trim();
+  openAuthorOverlay().then(()=>setTimeout(()=>openAuthorDetail(key),80));
+}
+
+
+// Patch saveDetailOverlay to rebuild affil chips
+const _origSaveDO=saveDetailOverlay;
+saveDetailOverlay=function(){_origSaveDO();buildAffilChips();};
+
+function openDOI(){document.getElementById("doi-overlay").classList.add("show");document.getElementById("doi-ta").focus();}
+function closeDOI(){document.getElementById("doi-overlay").classList.remove("show");}
+
+async function doDOIAdd(){
+  var raw=document.getElementById("doi-ta").value;
+  var lines=raw.split("\n").map(function(s){return s.trim();}).filter(Boolean);
+  if(!lines.length)return;
+  var log=document.getElementById("doi-log");
+  log.style.display="block";log.innerHTML="";
+  var btn=document.getElementById("doi-go");
+  btn.disabled=true;btn.textContent="获取中…";
+  var added=0,skipped=0;
+  for(var li=0;li<lines.length;li++){
+    var line=lines[li];
+    var isDOI=(/^10\./.test(line)||line.indexOf("/")>-1);
+    var url=isDOI
+      ?"https://api.openalex.org/works/doi:"+encodeURIComponent(line)+"?select=id,title,authorships,publication_year,primary_location,doi,cited_by_count"
+      :"https://api.openalex.org/works?filter=title.search:"+encodeURIComponent(line.slice(0,100))+"&per_page=1&select=id,title,authorships,publication_year,primary_location,doi,cited_by_count";
+    try{
+      var r=await fetch(url);
+      if(!r.ok)throw new Error("HTTP "+r.status);
+      var d=await r.json();
+      var w=d.id?d:((d.results&&d.results[0])||null);
+      if(!w||!w.title){log.innerHTML+="<div>❌ 未找到: "+esc(line.slice(0,60))+"</div>";skipped++;continue;}
+      var doi2=(w.doi||"").replace("https://doi.org/","");
+      if(doi2&&libDOI.get(nd(doi2))){log.innerHTML+="<div>⚠ 已存在: "+esc((w.title||"").slice(0,60))+"</div>";skipped++;continue;}
+      if(libTitle.get(nt(w.title||""))){log.innerHTML+="<div>⚠ 已存在: "+esc((w.title||"").slice(0,60))+"</div>";skipped++;continue;}
+      var newIt={
+        id:"manual-"+uid(),
+        title:w.title||"",
+        authors:(w.authorships||[]).map(function(a){return a.author&&a.author.display_name||"";}).filter(Boolean),
+        year:String(w.publication_year||""),
+        journal:(w.primary_location&&w.primary_location.source&&w.primary_location.source.display_name)||"",
+        doi:doi2,tags:[],notes:[],dpAttrs:{},dpAffiliations:[],dpAttrRegistry:{},
+        oaAuthorships:(w.authorships||[]).map(function(a){return{
+          id:(a.author&&a.author.id||"").replace("https://openalex.org/",""),
+          name:a.author&&a.author.display_name||"",
+          orcid:a.author&&a.author.orcid||"",
+          institution:(a.institutions&&a.institutions[0]&&a.institutions[0].display_name)||""
+        };})
+      };
+      library.push(newIt);
+      added++;
+      var yr=w.publication_year?" ("+w.publication_year+")":"";
+      log.innerHTML+="<div>✅ "+esc((w.title||"").slice(0,60))+yr+"</div>";
+    }catch(err){
+      log.innerHTML+="<div>❌ "+esc(line.slice(0,50))+" — "+err.message+"</div>";skipped++;
+    }
+    log.scrollTop=log.scrollHeight;
+    await sleep(150);
+  }
+  if(added>0){
+    buildIdx();buildChips();applyFilter();invalidateAuthorDB();
+    document.getElementById("btn-add").disabled=false;
+    document.getElementById("btn-fetch").disabled=false;
+    markUnsaved();
+    toast("已添加 "+added+" 篇文献"+(skipped?" ("+skipped+" 跳过)":""));
+  }
+  btn.disabled=false;btn.textContent="📥 获取并添加";
+  if(added>0){document.getElementById("doi-ta").value="";setTimeout(closeDOI,1200);}
+}
+
+// ══════════════════════════════════════════════════════════════
+//  ZOTERO + OA IMPORT
+// ══════════════════════════════════════════════════════════════
+let _zoaItems=[];     // parsed Zotero items waiting to import
+let _zoaCancelled=false;
+
+function startZoteroOAImport(e){
+  const f=e.target.files[0]; e.target.value=''; if(!f)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const raw=JSON.parse(ev.target.result);
+      const items=raw.items||(Array.isArray(raw)?raw:[raw]);
+      _zoaItems=items.filter(it=>!['attachment','note'].includes(it.itemType||''));
+      if(!_zoaItems.length){toast('未找到可导入的文献条目');return;}
+      // Reset UI
+      document.getElementById('zoa-s-total').textContent=`共 ${_zoaItems.length} 篇`;
+      document.getElementById('zoa-s-ok').textContent='✅ 0';
+      document.getElementById('zoa-s-fallback').textContent='⚠ 回退 0';
+      document.getElementById('zoa-s-skip').textContent='⏭ 跳过 0';
+      document.getElementById('zoa-log').style.display='none';
+      document.getElementById('zoa-log').innerHTML='';
+      document.getElementById('zoa-prog-wrap').style.display='none';
+      document.getElementById('zoa-prog-fill').style.width='0%';
+      document.getElementById('zoa-start-btn').disabled=false;
+      document.getElementById('zoa-start-btn').textContent='▶ 开始导入';
+      document.getElementById('zoa-cancel-btn').textContent='取消';
+      document.getElementById('zoa-overlay').style.display='flex';
+    }catch(err){toast('解析失败: '+err.message);}
+  };
+  reader.readAsText(f);
+}
+
+function zoaCancelImport(){
+  _zoaCancelled=true;
+  document.getElementById('zoa-overlay').style.display='none';
+}
+
+async function zoaDoImport(){
+  if(!_zoaItems.length)return;
+  _zoaCancelled=false;
+  const log=document.getElementById('zoa-log');
+  log.style.display='block'; log.innerHTML='';
+  document.getElementById('zoa-prog-wrap').style.display='flex';
+  const btn=document.getElementById('zoa-start-btn');
+  btn.disabled=true; btn.textContent='导入中…';
+
+  let okCount=0, fallbackCount=0, skipCount=0;
+  const total=_zoaItems.length;
+
+  const _upd=()=>{
+    document.getElementById('zoa-s-ok').textContent=`✅ ${okCount}`;
+    document.getElementById('zoa-s-fallback').textContent=`⚠ 回退 ${fallbackCount}`;
+    document.getElementById('zoa-s-skip').textContent=`⏭ 跳过 ${skipCount}`;
+  };
+
+  for(let i=0;i<total;i++){
+    if(_zoaCancelled)break;
+    const it=_zoaItems[i];
+    const pct=Math.round((i+1)/total*100);
+    document.getElementById('zoa-prog-fill').style.width=pct+'%';
+    document.getElementById('zoa-prog-txt').textContent=`${i+1} / ${total}`;
+
+    // Extract DOI and title from Zotero item (handle both formats)
+    const doi=(it.DOI||it.doi||'').replace('https://doi.org/','').trim();
+    const titleRaw=it.title||'';
+    // Extract tags and notes from Zotero to preserve them
+    const zoTags=(it.tags||[]).map(t=>typeof t==='string'?t:(t.tag||'')).filter(Boolean);
+    const zoNotes=(it.notes||[]).map(n=>typeof n==='string'?n:(n.note||'')).filter(Boolean);
+
+    // Skip duplicates
+    if(doi&&libDOI.get(nd(doi))){
+      log.innerHTML+=`<div style="color:var(--text3)">⏭ 已存在: ${esc(titleRaw.slice(0,60))}</div>`;
+      skipCount++; _upd(); log.scrollTop=log.scrollHeight; continue;
+    }
+    if(titleRaw&&libTitle.get(nt(titleRaw))){
+      log.innerHTML+=`<div style="color:var(--text3)">⏭ 已存在: ${esc(titleRaw.slice(0,60))}</div>`;
+      skipCount++; _upd(); log.scrollTop=log.scrollHeight; continue;
+    }
+
+    // Build OA query URL — DOI preferred, title fallback
+    const oaUrl=doi
+      ?`https://api.openalex.org/works/doi:${encodeURIComponent(doi)}?select=id,title,authorships,publication_year,primary_location,doi,cited_by_count,primary_topic,keywords,fwci,open_access,is_retracted,abstract_inverted_index`
+      :`https://api.openalex.org/works?filter=title.search:${encodeURIComponent(titleRaw.slice(0,100))}&per_page=1&select=id,title,authorships,publication_year,primary_location,doi,cited_by_count,primary_topic,keywords,fwci,open_access,is_retracted,abstract_inverted_index`;
+
+    try{
+      const r=await fetch(oaUrl);
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const d=await r.json();
+      const w=d.id?d:(d.results?.[0]||null);
+
+      if(w&&w.title){
+        // ── OA data found: build standardized entry ──
+        const oaDoi=(w.doi||'').replace('https://doi.org/','');
+        const oaAuthorships=(w.authorships||[]).map(a=>({
+          id:(a.author?.id||'').replace('https://openalex.org/',''),
+          name:a.author?.display_name||'',
+          orcid:a.author?.orcid||'',
+          institution:(a.institutions||[])[0]?.display_name||''
+        }));
+        const newIt={
+          id:'manual-'+uid(),
+          title:w.title||titleRaw,
+          authors:oaAuthorships.map(a=>a.name).filter(Boolean),
+          year:String(w.publication_year||''),
+          journal:(w.primary_location?.source?.display_name)||'',
+          abstract:'',
+          doi:oaDoi||doi,
+          url:w.id||'',
+          tags:[...zoTags],   // preserve Zotero tags
+          notes:[...zoNotes], // preserve Zotero notes
+          dpAttrs:{},dpAffiliations:[],dpAttrRegistry:{},
+          oaAuthorships,
+          citationCount:w.cited_by_count||0,
+        };
+        // Merge OA enrichments
+        if(w.primary_topic)newIt.oaTopic={topic:w.primary_topic.display_name,subfield:w.primary_topic.subfield?.display_name,field:w.primary_topic.field?.display_name,domain:w.primary_topic.domain?.display_name};
+        if(w.keywords?.length)newIt.oaKeywords=w.keywords.map(k=>k.display_name);
+        if(w.fwci!=null)newIt.oaFwci=w.fwci;
+        if(w.open_access)newIt.oaOpenAccess={isOA:w.open_access.is_oa,status:w.open_access.oa_status,url:w.open_access.oa_url};
+        if(w.is_retracted!=null)newIt.oaRetracted=w.is_retracted;
+        if(w.abstract_inverted_index){try{const idx2=w.abstract_inverted_index;const allPos=Object.values(idx2).flat();if(allPos.length){const maxPos=Math.max(...allPos)+1;const arr=new Array(maxPos).fill('');Object.entries(idx2).forEach(([word,pos])=>pos.forEach(p=>{if(p<maxPos)arr[p]=word;}));newIt.abstract=arr.join(' ');}}catch(_){}}
+        library.push(newIt);
+        libDOI.set(nd(newIt.doi),newIt);
+        libTitle.set(nt(newIt.title),newIt);
+        okCount++;
+        log.innerHTML+=`<div style="color:var(--green)">✅ ${esc(newIt.title.slice(0,60))} (${newIt.year})</div>`;
+      } else {
+        throw new Error('OA未找到');
+      }
+    }catch(_){
+      // ── Fallback: use local Zotero data ──
+      const fb=normItem(it);
+      if(fb.title==='(无标题)'&&!fb.doi){
+        log.innerHTML+=`<div style="color:var(--red)">❌ 跳过（无法识别）: ${esc(titleRaw.slice(0,50))}</div>`;
+        skipCount++;
+      } else {
+        library.push({...fb,id:'manual-'+uid()});
+        libDOI.set(nd(fb.doi),fb);
+        libTitle.set(nt(fb.title),fb);
+        fallbackCount++;
+        log.innerHTML+=`<div style="color:var(--gold)">⚠ 回退本地: ${esc(fb.title.slice(0,60))}</div>`;
+      }
+    }
+    _upd();
+    log.scrollTop=log.scrollHeight;
+    await sleep(200); // respect OA rate limit (~5 req/s)
+  }
+
+  const added=okCount+fallbackCount;
+  if(added>0){
+    buildIdx();buildChips();applyFilter();invalidateAuthorDB();
+    document.getElementById('btn-add').disabled=false;
+    document.getElementById('btn-fetch').disabled=false;
+    markUnsaved();
+  }
+  btn.disabled=false;
+  btn.textContent=_zoaCancelled?'已取消':'✅ 完成';
+  document.getElementById('zoa-cancel-btn').textContent='关闭';
+  toast(`Zotero导入完成：✅${okCount} ⚠${fallbackCount} ⏭${skipCount}`);
+}
+
+
+async function addOAPaperToLib(w,rowEl,btn){
+  var doi=(w.doi||"").replace("https://doi.org/","").trim();
+  if(doi&&libDOI.get(nd(doi))){toast("⚠ 已在库中");return;}
+  if(nt(w.title||"")&&libTitle.get(nt(w.title||""))){toast("⚠ 已在库中");return;}
+  if(btn){btn.textContent="...";btn.disabled=true;}
+  var oaData=w;
+  if(!(w.authorships&&w.authorships.length)){
+    var oaId=(w.id||"").replace("https://openalex.org/","");
+    if(oaId||doi){
+      try{
+        var fu=doi
+          ?"https://api.openalex.org/works/doi:"+encodeURIComponent(doi)
+            +"?select=id,title,authorships,publication_year,primary_location,doi,cited_by_count"
+          :"https://api.openalex.org/works/"+oaId
+            +"?select=id,title,authorships,publication_year,primary_location,doi,cited_by_count";
+        var fr=await fetch(fu);
+        if(fr.ok)oaData=await fr.json();
+      }catch(_){}
+    }
+  }
+  var oaAuthorships=(oaData.authorships||[]).map(function(a){
+    return{
+      id:(a.author&&a.author.id||"").replace("https://openalex.org/",""),
+      name:(a.author&&a.author.display_name)||"",
+      orcid:(a.author&&a.author.orcid)||"",
+      institution:((a.institutions&&a.institutions[0]&&a.institutions[0].display_name)||"")
+    };
+  });
+  var newIt={
+    id:"manual-"+uid(),
+    title:oaData.title||w.title||"",
+    authors:oaAuthorships.length
+      ?oaAuthorships.map(function(a){return a.name;}).filter(Boolean)
+      :(w.authors||[]),
+    year:String(oaData.publication_year||w.publication_year||w.year||""),
+    journal:(oaData.primary_location&&oaData.primary_location.source
+             &&oaData.primary_location.source.display_name)
+            ||(w.primary_location&&w.primary_location.source
+             &&w.primary_location.source.display_name)
+            ||w.journal||"",
+    abstract:"",doi:doi,url:oaData.id||w.id||"",
+    tags:[],notes:[],dpAttrs:{},dpAffiliations:[],dpAttrRegistry:{},
+    oaAuthorships:oaAuthorships,
+    citationCount:oaData.cited_by_count||w.cited_by_count||w.citationCount||0
+  };
+  library.push(newIt);
+  buildIdx();
+  markUnsaved();
+  document.getElementById("btn-add").disabled=false;
+  document.getElementById("btn-fetch").disabled=false;
+  setTimeout(function(){
+    buildChips();buildAffilChips();buildAttrChips();applyFilter();
+  },50);
+  window._authorDBNeedsRefresh = true;
+  if(rowEl){
+    rowEl.classList.add("lib");
+    if(btn)btn.remove();
+    var bge=document.createElement("span");
+    bge.className="au-badge lib";bge.textContent="库中";
+    var meta=rowEl.querySelector(".au-paper-meta");
+    if(meta)meta.appendChild(bge);
+  }
+  toast("✅ 已添加："+(newIt.title||"").slice(0,40));
+}
+</script>
+
+
+<!-- ═══════════════════════ FM DETAIL OVERLAY ═══════════════════════ -->
+<div id="dp-overlay">
+  <!-- NAV -->
+  <div id="dp-nav">
+    <button id="dp-nav-back" onclick="closeDetailOverlay()">← 返回图谱</button>
+    <div style="flex:1;min-width:0;overflow:hidden;">
+      <div id="dp-nav-title"></div>
+      <div id="dp-nav-subtitle"></div>
+    </div>
+    <div id="dp-nav-right">
+      <button class="dp-nbtn gold" onclick="saveDetailOverlay()">💾 保存修改</button>
+      <button class="dp-nbtn green" onclick="dpOpenAddCatModal()">＋ 添加属性类别</button>
+      <button class="dp-nbtn" style="border-color:var(--red);color:var(--red)" onclick="deleteLibItem(dpCurrentId)" title="从文献库删除此文章">🗑 删除</button>
+    </div>
+  </div>
+  <!-- BODY -->
+  <div id="dp-body">
+    <!-- LEFT: Identity Card -->
+    <div id="dp-sidebar">
+      <div id="dp-card-hdr">
+        <div id="dp-card-avatar">📄</div>
+        <div id="dp-card-name"></div>
+        <div id="dp-card-journal"></div>
+        <div class="dp-stat-row">
+          <div class="dp-stat"><div class="dp-stat-val" id="dp-s-cited">0</div><div class="dp-stat-lbl">被引</div></div>
+          <div class="dp-stat"><div class="dp-stat-val" id="dp-s-refs">0</div><div class="dp-stat-lbl">引用</div></div>
+          <div class="dp-stat"><div class="dp-stat-val" id="dp-s-auth">0</div><div class="dp-stat-lbl">作者</div></div>
+        </div>
+      </div>
+      <div class="dp-sb-sec">
+        <div class="dp-sb-lbl"><span>📋</span>基本信息</div>
+        <div class="dp-meta-row"><span class="dp-meta-key">作者</span><span class="dp-meta-val" id="dp-m-authors" style="font-size:10px"></span></div>
+        <div class="dp-meta-row"><span class="dp-meta-key">年份</span><span class="dp-meta-val" id="dp-m-year"></span></div>
+        <div class="dp-meta-row"><span class="dp-meta-key">期刊</span><span class="dp-meta-val" id="dp-m-journal"></span></div>
+        <div class="dp-meta-row"><span class="dp-meta-key">DOI</span><span class="dp-meta-val" id="dp-m-doi"></span></div>
+      </div>
+      <div class="dp-sb-sec">
+        <div class="dp-sb-lbl"><span>🏷</span>标签</div>
+        <div class="dp-tag-wrap" id="dp-tag-wrap">
+          <input class="dp-tag-inp" id="dp-tag-inp" placeholder="＋ 标签" onkeydown="if(event.key==='Enter'){dpAddTag(this.value);this.value='';}">
+        </div>
+      </div>
+      <div class="dp-sb-sec">
+        <div class="dp-sb-lbl"><span>🏟</span>所属课题组 / 研究方向</div>
+        <div id="dp-clubs-list"></div>
+        <button class="dp-add-club-btn" onclick="dpAddAffiliation()">＋ 添加归属</button>
+      </div>
+      <div class="dp-sb-sec">
+        <div class="dp-sb-lbl"><span>📝</span>笔记</div>
+        <div id="dp-notes-list"></div>
+        <div style="display:flex;gap:6px;margin-top:4px;">
+          <button class="dp-add-note-btn" onclick="dpAddNoteField()">＋ 添加笔记</button>
+          <button class="dp-save-note-btn" onclick="dpSaveNotes()">💾 保存笔记</button>
+        </div>
+      </div>
+    </div>
+    <!-- MIDDLE: Custom Attributes (FM Style) -->
+    <div id="dp-mid">
+      <div class="dp-empty-attr" id="dp-empty-hint">
+        <h3>还没有自定义属性</h3>
+        <p>点击右上角「＋ 添加属性类别」<br>创建如「力学性能」「工艺参数」等类别<br>再在每个类别里添加子属性和数值</p>
+      </div>
+    </div>
+    <!-- RIGHT: Relations -->
+    <div id="dp-right">
+      <div class="dp-rs-sec">
+        <div class="dp-rs-hdr">📤 此文引用 <span class="dp-rs-cnt" id="dp-cnt-refs">0</span></div>
+        <div id="dp-refs-list"><div class="dp-ref-empty">尚未加载引用数据</div></div>
+      </div>
+      <div class="dp-rs-sec">
+        <div class="dp-rs-hdr">📥 被引 <span class="dp-rs-cnt" id="dp-cnt-cites">0</span></div>
+        <div id="dp-cites-list"><div class="dp-ref-empty">尚未加载被引数据</div></div>
+      </div>
+    </div>
+  </div>
+  <!-- MODAL -->
+  <div id="dp-modal-overlay" onclick="if(event.target===this)dpCloseModal()">
+    <div id="dp-modal">
+      <h3 id="dp-modal-title">添加属性类别</h3>
+      <div id="dp-modal-body"></div>
+      <div class="dp-modal-btns">
+        <button class="dp-modal-cancel" onclick="dpCloseModal()">取消</button>
+        <button class="dp-modal-confirm" id="dp-modal-confirm-btn" onclick="dpModalConfirm()">确认</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════ AUTHOR OVERLAY ═══════════ -->
+<div id="au-overlay">
+  <div id="au-nav">
+    <button id="au-back" onclick="closeAuthorOverlay()">← 返回图谱</button>
+    <div id="au-title">👤 作者浏览</div>
+    <div style="margin-left:auto;font-size:11px;color:var(--text2)" id="au-subtitle"></div>
+    <button class="tbtn" style="border-color:var(--cyan);color:var(--cyan);font-size:11px" onclick="enrichAuthorIds()" title="从 OpenAlex 补全作者 ID">🔬 补全作者ID</button>
+  </div>
+  <div id="au-body">
+    <div id="au-left">
+      <div id="au-srch-wrap">
+        <input id="au-srch-inp" placeholder="🔍 搜索作者名…" oninput="auFilter(this.value)">
+      </div>
+      <div id="au-srch-filter">
+        <span class="au-fchip on" id="au-f-all"  onclick="auSetFilter('all')">全部</span>
+        <span class="au-fchip"   id="au-f-lib"  onclick="auSetFilter('lib')">仅库中</span>
+        <span class="au-fchip"   id="au-f-multi" onclick="auSetFilter('multi')">多篇</span>
+      </div>
+      <div id="au-list"></div>
+    </div>
+    <div id="au-right">
+      <div style="color:var(--text3);text-align:center;padding:60px 20px;font-size:14px;">从左侧选择一位作者</div>
+    </div>
+  </div>
+</div>
+
+<div id="doi-overlay" onclick="if(event.target===this)closeDOI()">
+  <div id="doi-box">
+    <h3>📎 手动添加文献</h3>
+    <p>每行输入一个 DOI（如 10.1016/j.xxx）或文章标题，自动从 OpenAlex 获取元数据。</p>
+    <textarea id="doi-ta" placeholder="10.1016/j.actamat.2021.116800&#10;10.1038/nature12345&#10;或直接粘贴标题..."></textarea>
+    <div id="doi-btns">
+      <button id="doi-go" onclick="doDOIAdd()">📥 获取并添加</button>
+      <button id="doi-cancel" onclick="closeDOI()">取消</button>
+    </div>
+    <div id="doi-log"></div>
+  </div>
+</div>
+
+<!-- ════════ ZOTERO+OA IMPORT OVERLAY ════════ -->
+<div id="zoa-overlay" style="position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:22px;width:560px;max-width:95vw;max-height:85vh;display:flex;flex-direction:column;gap:12px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:14px;font-weight:800;color:var(--text)">📂 Zotero + OpenAlex 标准化导入</div>
+      <button onclick="document.getElementById('zoa-overlay').style.display='none'" style="background:none;border:none;color:var(--text2);font-size:16px;cursor:pointer;">✕</button>
+    </div>
+    <div style="font-size:11px;color:var(--text2);line-height:1.7;">
+      逐篇通过 OpenAlex 查询，优先用 DOI，失败则用标题搜索。<br>
+      OA 数据（作者ID/ORCID/被引量）优先；Zotero 的标签和笔记保留合并。<br>
+      OA 完全找不到的文章会回退使用本地 Zotero 数据保留。
+    </div>
+    <div id="zoa-stats" style="display:flex;gap:12px;font-size:11px;">
+      <span id="zoa-s-total" style="color:var(--text2)">共 0 篇</span>
+      <span id="zoa-s-ok" style="color:var(--green)">✅ 0</span>
+      <span id="zoa-s-fallback" style="color:var(--gold)">⚠ 回退 0</span>
+      <span id="zoa-s-skip" style="color:var(--text2)">⏭ 跳过 0</span>
+    </div>
+    <div id="zoa-prog-wrap" style="display:none;align-items:center;gap:8px;">
+      <div style="flex:1;height:5px;background:var(--panel2);border-radius:3px;overflow:hidden;">
+        <div id="zoa-prog-fill" style="height:100%;background:var(--accent);border-radius:3px;width:0%;transition:width .2s;"></div>
+      </div>
+      <span id="zoa-prog-txt" style="font-size:10px;color:var(--text2);min-width:50px;text-align:right;">0 / 0</span>
+    </div>
+    <div id="zoa-log" style="flex:1;overflow-y:auto;max-height:320px;background:var(--panel2);border-radius:6px;padding:8px;font-size:11px;line-height:1.8;color:var(--text2);display:none;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button id="zoa-cancel-btn" onclick="zoaCancelImport()" style="padding:7px 14px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text2);cursor:pointer;">取消</button>
+      <button id="zoa-start-btn" onclick="zoaDoImport()" style="padding:7px 16px;font-size:12px;font-weight:700;border:none;border-radius:6px;background:var(--accent);color:#fff;cursor:pointer;">▶ 开始导入</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
