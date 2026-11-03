@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XRD Quick Check v7 — 双尺度寻峰（窄峰+宽峰）</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+  body{font-family:'Segoe UI',Tahoma,sans-serif;max-width:1400px;margin:0 auto;padding:20px;background:#f5f5f5;color:#222}
+  .container{background:#fff;border-radius:10px;padding:22px;box-shadow:0 2px 10px rgba(0,0,0,.1);margin-bottom:18px}
+  h1,h2,h3{color:#2c5f8d;margin-top:0}
+  .controls{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;align-items:end}
+  button{background:#2c5f8d;color:#fff;border:none;padding:9px 16px;border-radius:5px;cursor:pointer;font-size:14px}
+  button:hover{background:#1e4668} button:disabled{background:#ccc;cursor:not-allowed}
+  .clear-btn{background:#d9534f}.green-btn{background:#5cb85c}.green-btn:hover{background:#4cae4c}
+  .grey-btn{background:#6c757d}
+  input,select{padding:8px;border:1px solid #ddd;border-radius:4px;font-size:14px}
+  .input-group{display:flex;flex-direction:column;gap:5px}
+  .input-group label{font-size:12px;color:#666;font-weight:600}
+  #chartDiv{width:100%;height:640px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-top:12px}
+  .info-box{background:#e7f3ff;border-left:4px solid #2c5f8d;padding:12px;margin-top:10px;border-radius:4px;font-size:14px;line-height:1.55}
+  .warn-box{background:#fff8e1;border-left:4px solid #f0ad4e;padding:12px;margin-top:10px;border-radius:4px;font-size:13.5px;line-height:1.55}
+  .ok-box{background:#f0fff4;border-left:4px solid #28a745;padding:12px;margin-top:10px;border-radius:4px;font-size:14px;line-height:1.55}
+  .file-label{background:#5cb85c;color:#fff;padding:9px 16px;border-radius:5px;cursor:pointer;display:inline-block;font-size:14px}
+  #fileInput{display:none}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin-top:10px}
+  th,td{border:1px solid #e2e2e2;padding:5px 8px;text-align:right}
+  th{background:#eef4fa;text-align:center} td:first-child,th:first-child{text-align:left}
+  .peak-input-row{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;margin-bottom:10px;align-items:end}
+  .remove-peak-btn{background:#dc3545;padding:8px 12px}
+  .small{font-size:12.5px;color:#666;line-height:1.5}
+  .phase-card{border:2px solid #ddd;border-radius:8px;padding:14px;margin-top:12px}
+  .phase-card.active{border-color:#2c5f8d;background:#f4f9ff}
+  .phase-card h3{margin:0 0 10px 0;cursor:pointer}
+  .drop-hint{border:2px dashed #b9cfe2;border-radius:8px;padding:10px;text-align:center;color:#7a97ad;font-size:13.5px;margin-bottom:10px;transition:all .15s}
+  .drop-hint.dragover{border-color:#2c5f8d;background:#e7f3ff;color:#2c5f8d;font-weight:600}
+  .seg{display:inline-flex;border:1px solid #2c5f8d;border-radius:6px;overflow:hidden}
+  .seg button{background:#fff;color:#2c5f8d;border-radius:0}
+  .seg button.active{background:#2c5f8d;color:#fff}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🔬 XRD Quick Check v7</h1>
+  <div class="controls">
+    <label for="fileInput" class="file-label">📁 载入数据 (.raw / .xrdml / .uxd / .xy / .txt / .csv)</label>
+    <input type="file" id="fileInput" accept=".raw,.xrdml,.uxd,.xy,.txt,.csv,.dat">
+    <div class="input-group" id="datasetBox" style="display:none">
+      <label>文件内含多条扫描 / 多个 range，选一条</label>
+      <select id="datasetSelect"></select>
+    </div>
+    <div class="input-group">
+      <label>纵轴显示（只改显示，不改数据）</label>
+      <div class="seg" id="modeSeg">
+        <button data-mode="linear" class="active">Linear</button>
+        <button data-mode="sqrt">√I</button>
+        <button data-mode="log">Log₁₀</button>
+      </div>
+    </div>
+    <div class="input-group">
+      <label>寻峰灵敏度（最小突出度，占最强峰 %；且须 ≥5 倍局部噪声）</label>
+      <input type="number" id="peakThresh" value="3" step="0.5" min="0.5" max="30" style="width:90px">
+    </div>
+    <button id="detectBtn" disabled>自动寻峰</button>
+    <button id="clearBtn" class="clear-btn" disabled>清除标识</button>
+  </div>
+  <div class="drop-hint" id="dropHint">⬇ 把数据文件直接拖到这个框里（或下方谱图上）即可载入，支持 .raw / .xrdml / .uxd / .xy</div>
+  <div id="chartDiv"></div>
+  <div class="small">点图上任意一点：把该处 2θ 填入下方当前选中的那个相的标定框，并自动估算该峰的 FWHM 填入晶粒尺寸表。图内拖拽可缩放，双击复位。</div>
+  <div id="fileInfoBox" class="ok-box" style="display:none"></div>
+  <div id="peakListBox" class="info-box" style="display:none"></div>
+</div>
+
+<div class="container">
+  <h2>💎 1) 多相标定 → 理论峰标识（最多 3 个相）</h2>
+  <p class="small">用法：点某个相的标题把它设为「当前相」，然后点谱图上的峰，2θ 会填入当前相的标定框。逐相填好结构与标定峰后，点下方按钮一次标识全部相——每个相用自己的颜色，标签带相名。B2 相请选择结构「B2」（有序 BCC，含 (100) 等超晶格峰；无序 BCC 选 BCC）。不需要的相取消勾选「启用」即可。</p>
+  <div id="phaseCards"></div>
+  <button id="calibrateBtn" style="margin-top:14px;width:100%" disabled>计算并标识所有启用的相</button>
+  <div class="info-box" id="resultInfo" style="display:none"></div>
+  <div id="matchTableBox"></div>
+</div>
+
+<div class="container">
+  <h2>📏 2) 晶粒（晶粒域）尺寸 — Scherrer / Williamson–Hall</h2>
+  <div class="warn-box">
+    <strong>先说清适用范围：</strong>Scherrer 给的是相干衍射域尺寸，不是 EBSD 意义上的晶粒尺寸。
+    只对纳米晶 / 严重变形 / 薄膜有意义；当算出结果 ≳150–200 nm 时，展宽已接近仪器展宽，数值基本由仪器决定，不能当真实晶粒尺寸报。
+    FWHM 必须来自峰拟合（或下方自动估算），不能靠肉眼在图上量——那是本工具原版最大的误差源。
+  </div>
+  <div class="grid">
+    <div class="input-group">
+      <label>仪器展宽 β_inst (°，应由 LaB₆ / Si 标样在相近 2θ 测得)</label>
+      <input type="number" id="instFWHM" value="0.10" step="0.01">
+    </div>
+    <div class="input-group">
+      <label>仪器展宽校正方式</label>
+      <select id="corrMode">
+        <option value="gauss" selected>Gaussian：β² = β_obs² − β_inst²（实验室粉末峰常用）</option>
+        <option value="lorentz">Lorentzian：β = β_obs − β_inst（原版用法）</option>
+        <option value="none">不校正</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>形状因子 K</label>
+      <input type="number" id="kFactor" value="0.9" step="0.01">
+    </div>
+  </div>
+  <div id="peakInputs" style="margin-top:14px"></div>
+  <div class="controls">
+    <button class="grey-btn" onclick="addPeakRow()">+ 加一行峰</button>
+    <button class="grey-btn" id="fillFromDetectBtn">从自动寻峰结果填入</button>
+  </div>
+  <button id="calcSizeStrainBtn" class="green-btn" style="width:100%">计算</button>
+  <div class="info-box" id="sizeStrainResult" style="display:none"></div>
+  <p class="small">1 个峰 → Scherrer（假设无应变）；≥2 个峰 → Williamson–Hall：β·cosθ = Kλ/D + 4ε·sinθ，截距给尺寸、斜率给微应变，并报告拟合 R²。R² 低或截距 ≤0 时结果不可信，程序会明确提示而不是硬给一个数。</p>
+</div>
+
+<script>
+"use strict";
+let WAVELENGTH = 1.5406; // 默认 Cu Kα1, Å；载入文件后按文件头里的波长自动更新
+let xData = [], yData = [];
+let datasets = []; // [{label, x, y, wavelength, info}] —— 一个文件可能含多条 scan / 多个 range
+let displayMode = 'linear';        // 'linear' | 'sqrt' | 'log'
+let peakAnnotations = [];          // {twoTheta, hkl, matched}
+let detectedPeaks = [];            // {x, y, fwhm}
+let clickHandlerAttached = false;
+
+/* ============ 显示变换：log 的正确做法 ============
+   原版 bug：直接把 y 轴设为 log，而强度里有 0（甚至负的背景噪声），
+   log(0) 无定义 → Plotly 整条曲线/坐标轴渲染异常；
+   另外每次 newPlot 都把 shapes/annotations 清空、又同步调用 relayout
+   去恢复，而 newPlot 是异步的，relayout 会被覆盖 → 标识丢失。
+   本版做法：
+   1) 所有重绘只走 render() 一条路，标识作为 layout 的一部分每次一起传入，
+      不存在"先画图再补标识"的时序问题；
+   2) log 模式下把显示用 y 截断到一个正的下限（只改显示、不改原始数据）；
+   3) 标识的文字标注锚在 paper 坐标 (yref:'paper')，与纵轴刻度无关，
+      在 linear / sqrt / log 三种模式下都不会消失或跑位；
+   4) 另提供 √I 模式——这是看弱杂峰最实用的缩放，不存在 0 的问题。 */
+function displayY(){
+  if(displayMode==='sqrt') return yData.map(v=>Math.sqrt(Math.max(v,0)));
+  if(displayMode==='log'){
+    const pos = yData.filter(v=>v>0);
+    const floor = pos.length ? Math.min(...pos)/3 : 1;
+    return yData.map(v=>Math.max(v, floor));
+  }
+  return yData.slice();
+}
+function yAxisConfig(){
+  if(displayMode==='sqrt') return {title:'√ Intensity', type:'linear'};
+  if(displayMode==='log')  return {title:'Intensity (log)', type:'log'};
+  return {title:'Intensity', type:'linear'};
+}
+
+function render(){
+  if(!xData.length) return;
+  const trace = {x:xData, y:displayY(), type:'scatter', mode:'lines',
+                 name:'XRD', line:{color:'#1f77b4', width:1}};
+  const traces = [trace];
+  if(detectedPeaks.length){
+    traces.push({x:detectedPeaks.map(p=>p.x), y:detectedPeaks.map(p=>{
+        // 标记点要落在当前显示刻度上：在显示空间里取该 x 处的值
+        const i = nearestIndex(p.x);
+        return displayY()[i];
+      }), type:'scatter', mode:'markers', name:'检出峰',
+      marker:{color:'#f39c12', size:8, symbol:'triangle-down'}});
+  }
+  const shapes = peakAnnotations.map(p=>({
+    type:'line', x0:p.twoTheta, x1:p.twoTheta, y0:0, y1:1, yref:'paper',
+    line:{color: p.color || '#dc3545', width:1.4, dash:'dash', opacity: p.matched===false ? 0.35 : 1}
+  }));
+  const annotations = peakAnnotations.map(p=>({
+    x:p.twoTheta, y:1, xref:'x', yref:'paper',
+    text:p.label || p.hkl, showarrow:false, yanchor:'bottom',
+    font:{size:11, color:p.color || '#dc3545'}, textangle:-90
+  }));
+  const layout = {title:'XRD Pattern', xaxis:{title:'2θ (degrees)'},
+    yaxis:yAxisConfig(), hovermode:'closest', plot_bgcolor:'#fafafa',
+    shapes:shapes, annotations:annotations, margin:{t:70}};
+  Plotly.react('chartDiv', traces, layout, {responsive:true});
+  if(!clickHandlerAttached){
+    clickHandlerAttached = true;
+    document.getElementById('chartDiv').on('plotly_click', function(data){
+      const px = data.points[0].x;
+      const _card = document.querySelectorAll('.phase-card')[activePhase];
+      if(_card) _card.querySelector('.ph-t2').value = px.toFixed(2);
+      // 点峰即估 FWHM，并填入尺寸表的最后一个空行
+      const est = estimateFWHM(px);
+      const rows = document.querySelectorAll('.peak-input-row');
+      if(rows.length===0) addPeakRow();
+      const last = document.querySelectorAll('.peak-input-row');
+      const row = last[last.length-1];
+      row.querySelector('.peak-2theta').value = px.toFixed(2);
+      if(est) row.querySelector('.peak-fwhm').value = est.toFixed(3);
+    });
+  }
+}
+function nearestIndex(x){
+  let best=0, bd=1e9;
+  for(let i=0;i<xData.length;i++){ const d=Math.abs(xData[i]-x); if(d<bd){bd=d;best=i;} }
+  return best;
+}
+
+/* ============ 文件读取：按扩展名 + 内容嗅探分发 ============
+   支持：Bruker .raw（二进制，旧版偏移）、Bruker .uxd（文本）、
+   PANalytical .xrdml（XML）、通用两列文本 .xy/.txt/.csv/.dat。
+   三种结构化格式都统一解析成 datasets[]，一条 scan/range 一条，
+   只有一个时直接载入，多个时顶部出现选择框。 */
+
+function finishLoad(){
+  peakAnnotations=[]; detectedPeaks=[];
+  document.getElementById('peakListBox').style.display='none';
+  render();
+  ['detectBtn','clearBtn','calibrateBtn'].forEach(id=>document.getElementById(id).disabled=false);
+  if(document.getElementById('peakInputs').children.length===0) addPeakRow();
+}
+function setDatasets(list, sourceLabel){
+  if(!list.length) throw new Error('文件里没有解析出任何数据段。');
+  datasets = list;
+  const sel = document.getElementById('datasetSelect');
+  sel.innerHTML = datasets.map((d,i)=>'<option value="'+i+'">'+d.label+'</option>').join('');
+  document.getElementById('datasetBox').style.display = datasets.length>1 ? '' : 'none';
+  applyDataset(0, sourceLabel);
+}
+function applyDataset(idx, sourceLabel){
+  const d = datasets[idx]; if(!d) return;
+  xData = d.x; yData = d.y;
+  if(d.wavelength && isFinite(d.wavelength) && d.wavelength>0.2 && d.wavelength<3) WAVELENGTH = d.wavelength;
+  const step = xData.length>1 ? Math.abs(xData[1]-xData[0]) : 0;
+  const box = document.getElementById('fileInfoBox');
+  box.style.display='block';
+  box.innerHTML = '<strong>已载入</strong>（'+(sourceLabel||d.format||'数据')+'）：'+xData.length+' 个点，2θ '+
+    Math.min(...xData).toFixed(2)+'–'+Math.max(...xData).toFixed(2)+'°，步长 ≈ '+step.toFixed(4)+'°，最大强度 '+Math.max(...yData)+
+    '，当前计算波长 λ = '+WAVELENGTH.toFixed(5)+' Å'+(d.info ? '<br>'+d.info : '');
+  finishLoad();
+}
+document.getElementById('datasetSelect').addEventListener('change', function(){ applyDataset(parseInt(this.value)); });
+
+/* ---- Bruker UXD（文本）：头是 _KEY = value，数据段以 range 为单位 ---- */
+function parseUXD(text){
+  const lines = text.split(/\r?\n/);
+  const globalMeta = {};
+  const ranges = [];
+  let cur = null; // {meta:{}, x:[], y:[], mode:null|'xy'|'counts'}
+  const kv = line => {
+    const m = line.match(/^_([A-Z0-9]+)\s*=\s*(.*)$/i);
+    return m ? [m[1].toUpperCase(), m[2].trim().replace(/^"|"$/g,'')] : null;
+  };
+  for(const rawLine of lines){
+    const line = rawLine.trim();
+    if(/^;.*Data for range/i.test(line) || (cur===null && ranges.length===0 && /^;/.test(line) && cur!==null)) { /* 注释行，忽略 */ }
+    if(/^;.*Data for range\s+(\d+)/i.test(line)){
+      if(cur) ranges.push(cur);
+      cur = {meta:{}, x:[], y:[], inData:false};
+      continue;
+    }
+    const pair = kv(line);
+    if(pair){
+      if(cur && !cur.inData) cur.meta[pair[0]] = pair[1];
+      else if(!cur) globalMeta[pair[0]] = pair[1];
+      if(pair[0]==='2THETACOUNTS'){ if(!cur){cur={meta:{},x:[],y:[],inData:true};} cur.inData = true; }
+      continue;
+    }
+    if(line.startsWith(';') || line==='') continue;
+    // 数据行：纯数字列
+    const nums = line.split(/[\s,;]+/).filter(s=>s!=='').map(Number);
+    if(nums.length && nums.every(v=>isFinite(v))){
+      if(!cur) cur = {meta:{}, x:[], y:[], inData:true};
+      cur.inData = true;
+      if(nums.length>=2){ cur.x.push(nums[0]); cur.y.push(nums[1]); cur.mode='xy'; }
+      else { cur.y.push(nums[0]); cur.mode='counts'; }
+    }
+  }
+  if(cur && cur.y.length) ranges.push(cur);
+  const out = [];
+  ranges.forEach((r,i)=>{
+    let xs = r.x;
+    if(r.mode==='counts' || xs.length!==r.y.length){
+      const start = parseFloat(r.meta.START ?? globalMeta.START ?? 0);
+      const step = parseFloat(r.meta.STEPSIZE ?? globalMeta.STEPSIZE ?? 0.02);
+      xs = r.y.map((_,j)=>start + j*step);
+    }
+    const wl = parseFloat(r.meta.WL1 ?? globalMeta.WL1);
+    const anode = r.meta.ANODE ?? globalMeta.ANODE ?? '';
+    const date = r.meta.DATEMEASURED ?? globalMeta.DATEMEASURED ?? '';
+    out.push({ format:'Bruker UXD', label:'Range '+(i+1)+'（'+xs[0].toFixed(1)+'–'+xs[xs.length-1].toFixed(1)+'°）',
+      x:xs, y:r.y, wavelength:isFinite(wl)?wl:null,
+      info:'UXD 文件头：阳极 '+(anode||'?')+'，_WL1='+(isFinite(wl)?wl:'?')+' Å'+(date?'，测量时间 '+date:'')+'。多列计数时取第一探测器列。' });
+  });
+  return out;
+}
+
+/* ---- PANalytical XRDML（XML，带命名空间）---- */
+function findAll(root, local){
+  let n = root.getElementsByTagNameNS ? root.getElementsByTagNameNS('*', local) : [];
+  if(!n || n.length===0) n = root.getElementsByTagName(local);
+  return Array.from(n||[]);
+}
+function childText(el, local){
+  const c = findAll(el, local)[0];
+  return c ? c.textContent.trim() : null;
+}
+function parseXRDML(text){
+  // 安全起见：去掉 XML 声明之前的任何杂质字符（BOM 被错误解码时会在开头留下杂质，严格 XML 解析器会直接报错——v3 读不了 XRDML 就是这个原因）
+  const lt = text.indexOf('<');
+  if(lt>0) text = text.slice(lt);
+  let doc = null;
+  try{ doc = new DOMParser().parseFromString(text, 'text/xml'); }catch(e){ doc = null; }
+  if(!doc || findAll(doc,'parsererror').length) return parseXRDMLFallback(text);
+  // 仪器/波长信息（整文件级）
+  const ka1 = parseFloat(childText(doc,'kAlpha1'));
+  let sysInfo = '';
+  const entryTexts = findAll(doc,'entry').map(e=>e.textContent);
+  const sysEntry = entryTexts.find(s=>/Diffractometer system=/i.test(s));
+  if(sysEntry) sysInfo = sysEntry.replace(/.*Diffractometer system=/i,'').trim();
+  const dps = findAll(doc,'dataPoints');
+  if(!dps.length) return parseXRDMLFallback(text);
+  const out = [];
+  dps.forEach((dp,i)=>{
+    // y：<counts>（XRDML 2.x）或 <intensities>（1.x）
+    const yEl = findAll(dp,'counts')[0] || findAll(dp,'intensities')[0];
+    if(!yEl) return;
+    const ys = yEl.textContent.trim().split(/\s+/).map(Number).filter(v=>isFinite(v));
+    if(ys.length<10) return;
+    // x：优先 listPositions / positions 文本列表，其次 start/end 等距生成
+    let xs = null;
+    const lp = findAll(dp,'listPositions')[0];
+    if(lp){ const v = lp.textContent.trim().split(/\s+/).map(Number).filter(v=>isFinite(v)); if(v.length===ys.length) xs = v; }
+    if(!xs){
+      const posEls = findAll(dp,'positions').filter(p=>/2Theta/i.test(p.getAttribute('axis')||''));
+      const pos = posEls[0];
+      if(pos){
+        const start = parseFloat(childText(pos,'startPosition'));
+        const end = parseFloat(childText(pos,'endPosition'));
+        const listNums = pos.textContent.trim().split(/\s+/).map(Number).filter(v=>isFinite(v));
+        if(listNums.length===ys.length) xs = listNums;
+        else if(isFinite(start)&&isFinite(end)) xs = ys.map((_,j)=> start + (end-start)*j/(ys.length-1));
+      }
+    }
+    if(!xs) return;
+    out.push({ format:'PANalytical XRDML', label:'Scan '+(i+1)+'（'+xs[0].toFixed(1)+'–'+xs[xs.length-1].toFixed(1)+'°）',
+      x:xs, y:ys, wavelength:isFinite(ka1)?ka1:null,
+      info:'XRDML 文件头：仪器 '+(sysInfo||'PANalytical')+'，Kα1='+(isFinite(ka1)?ka1.toFixed(7):'?')+' Å。' });
+  });
+  if(!out.length) return parseXRDMLFallback(text);
+  return out;
+}
+
+/* ---- XRDML 正则兜底：DOM 解析失败时仍能把数据抠出来 ---- */
+function parseXRDMLFallback(text){
+  const ka1m = text.match(/<kAlpha1[^>]*>([\d.]+)</);
+  const ka1 = ka1m ? parseFloat(ka1m[1]) : NaN;
+  const sysm = text.match(/Diffractometer system=([^"<]+)/i);
+  const blocks = text.split(/<dataPoints>/).slice(1);
+  const out = [];
+  blocks.forEach((blk,i)=>{
+    const cm = blk.match(/<(?:counts|intensities)[^>]*>([^<]+)</);
+    if(!cm) return;
+    const ys = cm[1].trim().split(/\s+/).map(Number).filter(v=>isFinite(v));
+    if(ys.length<10) return;
+    const pm = blk.match(/<positions[^>]*axis="2Theta"[^>]*>([\s\S]*?)<\/positions>/);
+    if(!pm) return;
+    const sm = pm[1].match(/<startPosition>([\d.eE+-]+)</);
+    const em = pm[1].match(/<endPosition>([\d.eE+-]+)</);
+    const listNums = pm[1].replace(/<[^>]+>/g,' ').trim().split(/\s+/).map(Number).filter(v=>isFinite(v));
+    let xs = null;
+    if(listNums.length===ys.length) xs = listNums;
+    else if(sm && em){ const s=parseFloat(sm[1]), e2=parseFloat(em[1]); xs = ys.map((_,j)=> s + (e2-s)*j/(ys.length-1)); }
+    if(!xs) return;
+    out.push({ format:'PANalytical XRDML', label:'Scan '+(i+1)+'（'+xs[0].toFixed(1)+'–'+xs[xs.length-1].toFixed(1)+'°）',
+      x:xs, y:ys, wavelength:isFinite(ka1)?ka1:null,
+      info:'XRDML（正则兜底解析）：仪器 '+((sysm&&sysm[1].trim())||'PANalytical')+'，Kα1='+(isFinite(ka1)?ka1.toFixed(7):'?')+' Å。' });
+  });
+  if(!out.length) throw new Error('XRDML 解析失败：DOM 与正则两种方式都没找到 counts/positions。把这个文件发给 Muse 继续适配。');
+  return out;
+}
+
+/* ---- Bruker RAW1.01 规范解析 ----
+   布局（已用真实文件 + 同一测量的 UXD 导出逐点验证，13126 点零误差）：
+   文件头 712 字节：魔数 "RAW1.01" @0，range 数 int32 @8，
+   波长 f64 @616(Kα平均) / @624(Kα1) / @632(Kα2) / @640(Kβ)。
+   每个 range：304 字节扫描头（首个 int32 就是头长 304），
+   +4 int32 点数，+8 f64 θ 起始，+16 f64 2θ 起始，+176 f64 步长，+240 f64 波长；
+   数据紧随其后：float32 小端计数 × 点数；下一个 range 紧接数据之后。 */
+function parseRAW(buf){
+  const dv = new DataView(buf);
+  const magic = new TextDecoder('ascii').decode(buf.slice(0,7));
+  if(!magic.startsWith('RAW')) throw new Error('文件头不是 RAW 魔数（读到 "'+magic+'"），可能不是 Bruker RAW 文件。');
+  const version = magic.replace(/\0/g,'').trim(); // 如 RAW1.01
+  if(!/^RAW1\./.test(version))
+    throw new Error('检测到 '+version+'：目前只支持 RAW1.01 的规范解析。其他版本请先从仪器软件导出 .uxd 再载入，或把该 RAW 文件发给 Muse 适配。');
+  const rangeCount = dv.getInt32(8, true);
+  const wlFile = dv.getFloat64(624, true);
+  const out = [];
+  let offset = 712;
+  const nRanges = (rangeCount>=1 && rangeCount<=50) ? rangeCount : 1;
+  for(let r=0; r<nRanges; r++){
+    if(offset+304 > buf.byteLength) break;
+    const headerLen = dv.getInt32(offset, true);
+    const n = dv.getInt32(offset+4, true);
+    const ttStart = dv.getFloat64(offset+16, true);
+    const step = dv.getFloat64(offset+176, true);
+    const wlRange = dv.getFloat64(offset+240, true);
+    if(!(headerLen>=100 && headerLen<=10000 && n>10 && step>0 && step<1 && ttStart>=-10 && ttStart<360))
+      throw new Error('Range '+(r+1)+' 的扫描头字段不合理（头长='+headerLen+'，点数='+n+'，起始='+ttStart+'，步长='+step+'），文件结构与 RAW1.01 规范不符。');
+    const dataStart = offset + headerLen;
+    if(dataStart + n*4 > buf.byteLength) throw new Error('Range '+(r+1)+' 数据区超出文件长度，文件可能被截断。');
+    const ys = new Array(n), xs = new Array(n);
+    for(let i=0;i<n;i++){ ys[i] = dv.getFloat32(dataStart + i*4, true); xs[i] = ttStart + i*step; }
+    const wl = (wlRange>0.2 && wlRange<3) ? wlRange : wlFile;
+    out.push({ format:'Bruker RAW ('+version+')', label:'Range '+(r+1)+'（'+ttStart.toFixed(1)+'–'+(ttStart+(n-1)*step).toFixed(1)+'°）',
+      x:xs, y:ys, wavelength:(wl>0.2&&wl<3)?wl:null,
+      info:'RAW1.01 规范解析：起始 2θ='+ttStart+'°，步长='+step+'°，'+n+' 点，λ 取自扫描头 '+(wl?wl.toFixed(5):'?')+' Å。' });
+    offset = dataStart + n*4;
+  }
+  if(!out.length) throw new Error('RAW 里没有解析出任何 range。');
+  return out;
+}
+
+/* ---- 主入口（文件选择与拖拽共用） ---- */
+async function loadFile(file){
+  if(!file) return;
+  try{
+    const name = file.name.toLowerCase();
+    const buf = await file.arrayBuffer();
+    if(name.endsWith('.raw')){
+      setDatasets(parseRAW(buf), 'Bruker RAW');
+      return;
+    }
+    // 文本类必须按格式选解码：XRDML 是 UTF-8（带 BOM），若按 windows-1252 解，
+    // BOM 会变成 "<?xml" 之前的杂质字符、严格 XML 解析直接失败（v3 的 bug）；
+    // UXD 是 Latin-1（文件头有德语字符），按 windows-1252 解。
+    const probe = new TextDecoder('iso-8859-1').decode(buf.slice(0, 4096));
+    const isXML = name.endsWith('.xrdml') || /<xrdMeasurements/i.test(probe);
+    const text = isXML ? new TextDecoder('utf-8').decode(buf)
+                       : new TextDecoder('windows-1252').decode(buf);
+    const head = text.slice(0, 2000);
+    if(name.endsWith('.xrdml') || /<xrdMeasurements/i.test(head)){
+      setDatasets(parseXRDML(text), 'PANalytical XRDML');
+    } else if(name.endsWith('.uxd') || /_FILEVERSION/i.test(head) || /_2THETACOUNTS|_THETACOUNTS/i.test(text.slice(0,20000))){
+      setDatasets(parseUXD(text), 'Bruker UXD');
+    } else {
+      const xs=[], ys=[];
+      text.split(/\r?\n/).forEach(line=>{
+        const m = line.trim().split(/[\s,;]+/);
+        if(m.length>=2){ const a=parseFloat(m[0]), b=parseFloat(m[1]);
+          if(isFinite(a)&&isFinite(b)){ xs.push(a); ys.push(b); } }
+      });
+      if(xs.length<10) throw new Error('没识别出格式：不是 xrdml/uxd，文本里也没有足够多的两列数字。');
+      setDatasets([{format:'XY 文本', label:'XY', x:xs, y:ys, wavelength:null, info:'两列文本按 (2θ, 强度) 解析，波长沿用当前值 '+WAVELENGTH.toFixed(5)+' Å。'}], 'XY 文本');
+    }
+  }catch(err){ alert('文件读取失败：'+err.message); }
+}
+document.getElementById('fileInput').addEventListener('change', function(e){ loadFile(e.target.files[0]); e.target.value=''; });
+
+/* ---- 拖拽上传：拖到顶部提示框或谱图区任意位置 ---- */
+(function(){
+  const hint = document.getElementById('dropHint');
+  const zone = document.querySelectorAll('.container')[0];
+  ['dragover','drop'].forEach(ev=>document.addEventListener(ev, e=>e.preventDefault())); // 防浏览器直接打开文件
+  let depth = 0;
+  zone.addEventListener('dragenter', e=>{ e.preventDefault(); depth++; hint.classList.add('dragover'); hint.textContent='⬇ 松开鼠标载入文件'; });
+  zone.addEventListener('dragleave', ()=>{ depth--; if(depth<=0){ depth=0; hint.classList.remove('dragover'); hint.textContent='⬇ 把数据文件直接拖到这个框里（或下方谱图上）即可载入，支持 .raw / .xrdml / .uxd / .xy'; } });
+  zone.addEventListener('dragover', e=>e.preventDefault());
+  zone.addEventListener('drop', e=>{
+    e.preventDefault(); depth=0; hint.classList.remove('dragover');
+    hint.textContent='⬇ 把数据文件直接拖到这个框里（或下方谱图上）即可载入，支持 .raw / .xrdml / .uxd / .xy';
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if(f) loadFile(f);
+  });
+})();
+
+document.getElementById('modeSeg').addEventListener('click', function(e){
+  if(e.target.tagName!=='BUTTON') return;
+  displayMode = e.target.dataset.mode;
+  this.querySelectorAll('button').forEach(b=>b.classList.toggle('active', b===e.target));
+  render(); // 标识在 layout 里，切换缩放不会丢
+});
+document.getElementById('clearBtn').addEventListener('click', ()=>{
+  peakAnnotations=[]; document.getElementById('resultInfo').style.display='none';
+  document.getElementById('matchTableBox').innerHTML=''; render();
+});
+
+/* ============ 寻峰 + FWHM 估算 ============ */
+function smoothArr(arr, winPts){
+  let w = Math.max(3, Math.round(winPts));
+  if(w%2===0) w+=1;
+  const h = Math.floor(w/2), n = arr.length, out = new Array(n);
+  const cs = [0];
+  for(let i=0;i<n;i++) cs.push(cs[i]+arr[i]);
+  for(let i=0;i<n;i++){
+    const a = Math.max(0,i-h), b = Math.min(n,i+h+1);
+    out[i] = (cs[b]-cs[a])/(b-a);
+  }
+  return out;
+}
+function stepDeg(){ return xData.length>1 ? Math.abs(xData[1]-xData[0]) : 0.02; }
+function smoothWindowPts(){ // 平滑窗宽 ≈0.09°，与峰宽匹配而不是只盖住几个采样点
+  const w = Math.round(0.09/Math.max(stepDeg(),1e-6));
+  return Math.max(5, Math.min(41, w));
+}
+function smoothed(){ return smoothArr(yData, smoothWindowPts()); }
+function estimateFWHM(px){
+  if(!xData.length) return null;
+  const i0 = nearestIndex(px);
+  // 局部背景：±1.5° 窗口内的最小平滑值
+  const sm = smoothed();
+  const step = Math.abs(xData[1]-xData[0]) || 0.02;
+  const win = Math.max(3, Math.round(2.5/step)); // 背景窗放宽到 ±2.5°，照顾高角度宽峰
+  let bg = Infinity;
+  for(let i=Math.max(0,i0-win); i<=Math.min(xData.length-1,i0+win); i++) bg=Math.min(bg, sm[i]);
+  const half = bg + (sm[i0]-bg)/2;
+  let li=i0; while(li>0 && sm[li]>half) li--;
+  let ri=i0; while(ri<xData.length-1 && sm[ri]>half) ri++;
+  // 线性插值求半高交点
+  function cross(iA,iB){
+    const yA=sm[iA], yB=sm[iB]; if(yB===yA) return xData[iA];
+    return xData[iA] + (half-yA)*(xData[iB]-xData[iA])/(yB-yA);
+  }
+  const xl = cross(li, li+1), xr = cross(ri-1, ri);
+  const wdt = Math.abs(xr-xl);
+  return (wdt>0 && wdt<3) ? wdt : null;
+}
+/* ============ 寻峰 v6：平滑 + 突出度(prominence) + 局部噪声门槛 ============
+   旧版为什么裂峰：只用 ±2 点平滑 + "比左右邻居高"判极大值，计数噪声在峰的
+   两翼留下一串局部极大，每个都被报成峰；且门槛是全局的，低角度背景高、
+   噪声大（泊松噪声 ∝ √计数），噪音包也被当成峰。
+   新版三道关（与 scipy.signal.find_peaks 的思路一致）：
+   1) 按 ≈0.09° 的窗宽平滑（匹配真实峰宽，而不是采样点噪声）；
+   2) 突出度：峰必须相对两侧谷底隆起足够多——峰翼上的小抖动突出度只有
+      抖动本身的深度，过不了关；一个真峰只会报一次；
+   3) 局部噪声：突出度还须 ≥5 倍该峰附近 (±1.5°) 由差分 MAD 估的噪声 σ，
+      低角度高背景区自动抬高门槛。
+   最后按最小间距 0.3° 去重，并用抛物线内插把峰位细化到步长以内。 */
+function madSigma(vals){
+  if(vals.length<5) return 0;
+  const med = vals.slice().sort((a,b)=>a-b)[Math.floor(vals.length/2)];
+  const devs = vals.map(v=>Math.abs(v-med)).sort((a,b)=>a-b);
+  const mad = devs[Math.floor(devs.length/2)];
+  return mad>0 ? mad/0.6745 : 0;
+}
+function detectOnScale(ys, sensPct, promHalfDeg, noiseMode){
+  const n = yData.length, dx = stepDeg();
+  const sorted = ys.slice().sort((a,b)=>a-b);
+  const bg = sorted[Math.floor(0.2*n)];
+  const maxY = Math.max(...ys);
+  const promGlobal = (sensPct/100)*(maxY-bg);
+  const winPts = Math.max(10, Math.round(promHalfDeg/dx));
+  const out = [];
+  for(let i=1;i<n-1;i++){
+    if(!(ys[i]>=ys[i-1] && ys[i]>ys[i+1] && ys[i]>bg)) continue;
+    const h = ys[i];
+    let lmin = h, j = i;
+    while(j>Math.max(0,i-winPts) && ys[j]<=h){ j--; lmin = Math.min(lmin, ys[j]); }
+    let rmin = h; j = i;
+    while(j<Math.min(n-1,i+winPts) && ys[j]<=h){ j++; rmin = Math.min(rmin, ys[j]); }
+    const prom = h - Math.max(lmin, rmin);
+    const a = Math.max(0,i-winPts), b = Math.min(n-1,i+winPts);
+    const diffs = [];
+    if(noiseMode==='raw'){ for(let k=a;k<b;k++) diffs.push(yData[k+1]-yData[k]); }
+    else { for(let k=a;k<b;k++) diffs.push(ys[k+1]-ys[k]); }
+    const sigma = madSigma(diffs)/Math.SQRT2;
+    const need = Math.max(promGlobal, 5*sigma, noiseMode==='raw' ? 3 : 2);
+    if(prom < need) continue;
+    const denom = (ys[i-1]-2*ys[i]+ys[i+1]);
+    let frac = denom!==0 ? 0.5*(ys[i-1]-ys[i+1])/denom : 0;
+    frac = Math.max(-1, Math.min(1, frac));
+    out.push({x:xData[i]+frac*dx, y:yData[i], prom:prom});
+  }
+  return out;
+}
+function centroidRefine(ysA, xc, halfWinDeg){
+  const dx = stepDeg(), n = xData.length;
+  let i0 = 0, bd = 1e9;
+  for(let i=0;i<n;i++){ const d = Math.abs(xData[i]-xc); if(d<bd){ bd=d; i0=i; } }
+  const w = Math.max(3, Math.round(halfWinDeg/dx));
+  const a = Math.max(0,i0-w), b = Math.min(n-1,i0+w);
+  let base = Infinity, top = -Infinity;
+  for(let k=a;k<=b;k++){ base = Math.min(base, ysA[k]); top = Math.max(top, ysA[k]); }
+  const thr = base + 0.5*(top-base);
+  let sw = 0, swx = 0;
+  for(let k=a;k<=b;k++){ const wt = Math.max(ysA[k]-thr, 0); sw += wt; swx += wt*xData[k]; }
+  return sw>0 ? swx/sw : xc;
+}
+/* 双尺度寻峰：
+   窄尺度（平滑 ≈0.09°）负责尖锐峰，判据同 v6（突出度 + 原始噪声 5σ）；
+   宽尺度（平滑 ≈0.5°）专找高角度的宽、弱峰——这类峰逐点信噪比只有约 4–5，
+   过不了逐点 5σ 关，但把 ~60 个点平均后噪声降约 8 倍，峰顶平台也变成单个
+   干净极大。宽尺度的噪声 σ 直接从平滑曲线自身的差分估，自动反映这一降噪。
+   两尺度合并：0.35° 内视为同一峰、保留窄尺度定位；宽尺度独有的峰用
+   半高质心法在窄尺度曲线上重新定位。 */
+function findPeaksXRD(sensPct){
+  const dx = stepDeg();
+  const ysA = smoothed();
+  const peaksA = detectOnScale(ysA, sensPct, 1.5, 'raw');
+  const wB = Math.max(9, Math.min(161, Math.round(0.5/dx)));
+  const ysB = smoothArr(yData, wB);
+  const peaksB = detectOnScale(ysB, sensPct, 3.0, 'smoothed');
+  const merged = peaksA.slice();
+  for(const pb of peaksB){
+    if(peaksA.every(pa=>Math.abs(pa.x-pb.x)>=0.35)){
+      merged.push({x:centroidRefine(ysA, pb.x, 0.8), y:pb.y, prom:pb.prom, broad:true});
+    }
+  }
+  merged.sort((p,q)=>q.y-p.y);
+  const kept = [];
+  for(const p of merged){ if(kept.every(k=>Math.abs(k.x-p.x)>=0.3)) kept.push(p); }
+  kept.sort((p,q)=>p.x-q.x);
+  return kept.map(p=>({x:p.x, y:p.y, prom:p.prom, broad:!!p.broad, fwhm:estimateFWHM(p.x)}));
+}
+document.getElementById('detectBtn').addEventListener('click', ()=>{
+  const sens = parseFloat(document.getElementById('peakThresh').value)||3;
+  detectedPeaks = findPeaksXRD(sens);
+  const maxY = Math.max(...yData);
+  const box = document.getElementById('peakListBox');
+  box.style.display='block';
+  box.innerHTML = '<strong>检出 '+detectedPeaks.length+' 个峰</strong>（2θ / 相对强度 / 突出度 / 自动 FWHM）：<br>' +
+    detectedPeaks.map(p=>p.x.toFixed(2)+'° ('+Math.round(100*p.y/maxY)+'%, prom '+Math.round(p.prom) + (p.broad?', 宽':'') + (p.fwhm?', FWHM≈'+p.fwhm.toFixed(3)+'°':'') + ')').join(' · ') +
+    '<br><span class="small">双尺度判定：窄尺度（0.09° 平滑）抓尖峰，宽尺度（0.5° 平滑）抓高角度宽而弱的峰（标「宽」）；两尺度都要求突出度 ≥ 最强峰的 '+sens+'% 且 ≥5 倍对应尺度的噪声。漏掉弱峰把灵敏度调小（如 1），杂峰太多则调大（如 8–10）。宽峰峰位是质心估计，误差可达 ±0.3–0.5°，只用于判断有无，精确定位请点峰看图。</span>';
+  render();
+});
+
+/* ============ 理论峰生成：去重是关键修正 ============
+   原版 bug：h,k,l 三重循环取全部排列，(200)(020)(002) 等同一衍射峰
+   被重复生成多次，同一 2θ 上叠一堆标签，看起来"标识载入不正确"；
+   且 (333) 与 (511) 这类重合峰也没有处理。本版只取 h≥k≥l 的
+   唯一代表，并按 d 值合并重合峰、合并标注。 */
+function parseHKL(str){
+  str = (str||'').trim();
+  if(/[, ]/.test(str)) return str.split(/[, ]+/).filter(s=>s!=='').map(Number);
+  return str.split('').map(Number); // "111" -> [1,1,1]
+}
+function calcD(h,k,l,p,t){
+  if(t==='FCC'||t==='BCC'||t==='B2') return p.a/Math.sqrt(h*h+k*k+l*l);
+  if(t==='HCP') return 1/Math.sqrt((4/3)*(h*h+h*k+k*k)/(p.a*p.a) + (l*l)/(p.c*p.c));
+  return 1/Math.sqrt((h*h+k*k)/(p.a*p.a) + (l*l)/(p.c*p.c)); // SIGMA/四方
+}
+function dTo2Theta(d){
+  const s = WAVELENGTH/(2*d);
+  return s>1 ? null : 2*Math.asin(s)*180/Math.PI;
+}
+function reflections(type, params){
+  const list = [];
+  const put = (h,k,l)=>{
+    const d = calcD(h,k,l,params,type); const th = dTo2Theta(d);
+    if(th===null) return;
+    list.push({h,k,l,d,twoTheta:th, hkl:'('+h+k+''+l+')'});
+  };
+  if(type==='FCC'||type==='BCC'||type==='B2'){
+    for(let h=0;h<=5;h++) for(let k=0;k<=h;k++) for(let l=0;l<=k;l++){
+      if(h===0&&k===0&&l===0) continue;
+      if(type==='FCC'){ const par=[h,k,l].map(v=>v%2); if(!(par[0]===par[1]&&par[1]===par[2])) continue; }
+      if(type==='BCC'){ if((h+k+l)%2!==0) continue; }
+      // B2：有序结构，基峰与超晶格峰都允许出现，不做消光筛选
+      put(h,k,l);
+    }
+  } else if(type==='HCP'){
+    for(let h=0;h<=3;h++) for(let k=0;k<=h;k++) for(let l=0;l<=4;l++){
+      if(h===0&&k===0&&l===0) continue; put(h,k,l);
+    }
+  } else { // SIGMA 四方
+    for(let h=0;h<=5;h++) for(let k=0;k<=h;k++) for(let l=0;l<=5;l++){
+      if(h===0&&k===0&&l===0) continue; put(h,k,l);
+    }
+  }
+  // 按 2θ 合并重合峰（差 <0.01° 视为同一峰）
+  list.sort((a,b)=>a.twoTheta-b.twoTheta);
+  const merged = [];
+  for(const r of list){
+    const last = merged[merged.length-1];
+    if(last && Math.abs(last.twoTheta - r.twoTheta) < 0.01) last.hkl += '/' + r.hkl;
+    else merged.push({...r});
+  }
+  return merged;
+}
+
+/* ============ 多相标定（最多 3 个相） ============ */
+let activePhase = 0;
+const PHASE_COLORS = ['#dc3545','#1f77b4','#e67e22'];
+function setActivePhase(i){
+  activePhase = i;
+  document.querySelectorAll('.phase-card').forEach((c,j)=>c.classList.toggle('active', j===i));
+}
+function phaseCardHTML(d, i){
+  return '<h3><span style="color:'+PHASE_COLORS[i]+'">●</span> 相 '+(i+1)+'：<input type="text" class="ph-name" value="'+d.name+'" style="width:110px"> '+
+    '<label style="font-size:13px;font-weight:normal"><input type="checkbox" class="ph-enabled" '+(d.on?'checked':'')+'> 启用</label>'+
+    '<span class="small" style="margin-left:8px">（点此卡片设为当前相，点图填 2θ）</span></h3>'+
+    '<div class="grid">'+
+    '<div class="input-group"><label>结构类型</label><select class="ph-type">'+
+      ['FCC','BCC','B2','HCP','SIGMA'].map(t=>'<option value="'+t+'"'+(t===d.type?' selected':'')+'>'+(t==='B2'?'B2（有序 BCC，含超晶格峰）':t==='SIGMA'?'Sigma / 四方（需两峰）':t)+'</option>').join('')+
+    '</select></div>'+
+    '<div class="input-group"><label>标定峰 (hkl)</label><input type="text" class="ph-hkl" value="'+d.hkl+'"></div>'+
+    '<div class="input-group"><label>观测 2θ (°)</label><input type="number" class="ph-t2" step="0.01"></div>'+
+    '<div class="input-group ph-hcp" style="display:none"><label>c/a（HCP）</label><input type="number" class="ph-ca" value="1.633" step="0.001"></div>'+
+    '<div class="input-group ph-sig1" style="display:none"><label>第二峰 (hkl)</label><input type="text" class="ph-hkl2" value="200"></div>'+
+    '<div class="input-group ph-sig2" style="display:none"><label>第二峰 2θ (°)</label><input type="number" class="ph-t22" step="0.01"></div>'+
+    '</div>';
+}
+function buildPhaseCards(){
+  const defaults = [
+    {name:'FCC', type:'FCC', hkl:'111', on:true},
+    {name:'B2',  type:'B2',  hkl:'110', on:true},
+    {name:'Phase 3', type:'BCC', hkl:'110', on:false}
+  ];
+  const wrap = document.getElementById('phaseCards');
+  defaults.forEach((d,i)=>{
+    const card = document.createElement('div');
+    card.className = 'phase-card' + (i===0 ? ' active' : '');
+    card.innerHTML = phaseCardHTML(d, i);
+    wrap.appendChild(card);
+    const sel = card.querySelector('.ph-type');
+    const sync = ()=>{
+      const v = sel.value;
+      card.querySelector('.ph-hcp').style.display = v==='HCP' ? '' : 'none';
+      card.querySelector('.ph-sig1').style.display = v==='SIGMA' ? '' : 'none';
+      card.querySelector('.ph-sig2').style.display = v==='SIGMA' ? '' : 'none';
+    };
+    sel.addEventListener('change', sync); sync();
+    card.addEventListener('pointerdown', ()=>setActivePhase(i));
+  });
+}
+buildPhaseCards();
+
+function calibrateOnePhase(card, idx){
+  const name = card.querySelector('.ph-name').value.trim() || ('相'+(idx+1));
+  const type = card.querySelector('.ph-type').value;
+  const [h,k,l] = parseHKL(card.querySelector('.ph-hkl').value);
+  const t2 = parseFloat(card.querySelector('.ph-t2').value);
+  if(!isFinite(t2)) throw new Error(name+'：还没填标定峰的 2θ（点谱图或手动输入）。');
+  if([h,k,l].some(v=>!isFinite(v))) throw new Error(name+'：hkl 解析失败，请写成 111 或 1,1,1。');
+  const d_exp = WAVELENGTH/(2*Math.sin((t2/2)*Math.PI/180));
+  let params = {}, msg = '';
+  if(type==='FCC'||type==='BCC'||type==='B2'){
+    params.a = d_exp*Math.sqrt(h*h+k*k+l*l);
+    msg = 'a = '+params.a.toFixed(4)+' Å';
+  } else if(type==='HCP'){
+    const ca = parseFloat(card.querySelector('.ph-ca').value);
+    const term = (4/3)*(h*h+h*k+k*k) + (l*l)/(ca*ca);
+    params.a = Math.sqrt(d_exp*d_exp*term); params.c = params.a*ca;
+    msg = 'a = '+params.a.toFixed(4)+' Å，c = '+params.c.toFixed(4)+' Å（固定 c/a='+ca+'）';
+  } else { // SIGMA
+    const [h2,k2,l2] = parseHKL(card.querySelector('.ph-hkl2').value);
+    const t22 = parseFloat(card.querySelector('.ph-t22').value);
+    if(!isFinite(t22)) throw new Error(name+'：四方结构需要第二个峰的 2θ。');
+    const d2 = WAVELENGTH/(2*Math.sin((t22/2)*Math.PI/180));
+    const A1=h*h+k*k, B1=l*l, C1=1/(d_exp*d_exp);
+    const A2=h2*h2+k2*k2, B2v=l2*l2, C2=1/(d2*d2);
+    const det = A1*B2v - A2*B1;
+    if(Math.abs(det)<1e-9) throw new Error(name+'：两峰方程线性相关，换一个 l 不同的峰。');
+    params.a = Math.sqrt(1/((C1*B2v-C2*B1)/det));
+    params.c = Math.sqrt(1/((A1*C2-A2*C1)/det));
+    msg = 'a = '+params.a.toFixed(4)+' Å，c = '+params.c.toFixed(4)+' Å';
+  }
+  return {name, type, params, msg};
+}
+
+document.getElementById('calibrateBtn').addEventListener('click', function(){
+  try{
+    const cards = Array.from(document.querySelectorAll('.phase-card'));
+    const enabled = cards.map((c,i)=>({c,i})).filter(o=>o.c.querySelector('.ph-enabled').checked);
+    if(!enabled.length){ alert('至少启用一个相。'); return; }
+    const minT2 = Math.min(...xData), maxT2 = Math.max(...xData);
+    peakAnnotations = [];
+    const summaries = [];
+    const allRefs = [];
+    enabled.forEach(({c,i})=>{
+      const r = calibrateOnePhase(c, i);
+      const refs = reflections(r.type, r.params).filter(x=>x.twoTheta>=minT2 && x.twoTheta<=maxT2);
+      let matchedCount = 0;
+      refs.forEach(ref=>{
+        let matched = null, obs = null;
+        if(detectedPeaks.length){
+          const near = detectedPeaks.filter(p=>Math.abs(p.x-ref.twoTheta)<=0.30);
+          matched = near.length>0; obs = near.length ? near[0].x : null;
+          if(matched) matchedCount++;
+        }
+        peakAnnotations.push({twoTheta:ref.twoTheta, hkl:ref.hkl, label:r.name+' '+ref.hkl,
+          color:PHASE_COLORS[i], matched:matched, obs:obs, phase:r.name});
+        allRefs.push(ref);
+      });
+      summaries.push('<span style="color:'+PHASE_COLORS[i]+'">●</span> <strong>'+r.name+'</strong>（'+r.type+'）：'+r.msg+'，理论峰 '+refs.length+' 个'+(detectedPeaks.length?'，其中 '+matchedCount+' 个在谱上检出':''));
+    });
+    render();
+    const info = document.getElementById('resultInfo');
+    info.style.display = 'block';
+    info.innerHTML = summaries.join('<br>') + (detectedPeaks.length ? '' : '<br>提示：先点上方「自动寻峰」再标定，可自动判断每个理论峰是否出现、并列出所有相都解释不了的杂峰候选。');
+    if(detectedPeaks.length){
+      let rows = peakAnnotations.map(p=>'<tr><td>'+p.phase+'</td><td>'+p.hkl+'</td><td>'+p.twoTheta.toFixed(2)+'</td><td>'+(p.obs?p.obs.toFixed(2):'—')+'</td><td>'+(p.matched?'✅ 出现':'⚠️ 未检出')+'</td></tr>').join('');
+      const explained = detectedPeaks.filter(dp=>!allRefs.some(r=>Math.abs(r.twoTheta-dp.x)<=0.30));
+      let extra = explained.length
+        ? '<div class="warn-box"><strong>所有已标定相都解释不了的检出峰（杂峰 / 未标定相候选）：</strong>'+explained.map(p=>p.x.toFixed(2)+'°').join('，')+'<br>本工具只能报警不能定相：确认杂相仍需 Jade / Profex / QualX 做数据库 search-match；若它其实是第三个相，把相 3 启用再标一次。</div>'
+        : '<div class="ok-box">所有检出峰都能被已标定的相解释。</div>';
+      document.getElementById('matchTableBox').innerHTML =
+        '<table><tr><th>相</th><th>hkl</th><th>理论 2θ (°)</th><th>最近检出峰 (°)</th><th>状态</th></tr>'+rows+'</table>' + extra;
+    } else {
+      document.getElementById('matchTableBox').innerHTML = '';
+    }
+  }catch(e){ alert(e.message); }
+});
+
+/* ============ 尺寸 / 应变 ============ */
+function addPeakRow(){
+  const div = document.createElement('div');
+  div.className='peak-input-row';
+  div.innerHTML = '<div class="input-group"><label>2θ (deg)</label><input type="number" class="peak-2theta" step="0.01"></div>'+
+    '<div class="input-group"><label>FWHM (deg)</label><input type="number" class="peak-fwhm" step="0.001"></div>'+
+    '<div class="input-group"><label>hkl（可选）</label><input type="text" class="peak-hkl"></div>'+
+    '<button class="remove-peak-btn" onclick="this.parentElement.remove()">✕</button>';
+  document.getElementById('peakInputs').appendChild(div);
+}
+document.getElementById('fillFromDetectBtn').addEventListener('click', ()=>{
+  if(!detectedPeaks.length){ alert('先点「自动寻峰」。'); return; }
+  document.getElementById('peakInputs').innerHTML='';
+  detectedPeaks.forEach(p=>{
+    addPeakRow();
+    const rows = document.querySelectorAll('.peak-input-row');
+    const row = rows[rows.length-1];
+    row.querySelector('.peak-2theta').value = p.x.toFixed(2);
+    if(p.fwhm) row.querySelector('.peak-fwhm').value = p.fwhm.toFixed(3);
+  });
+});
+function correctedBeta(obsDeg, instDeg, mode){
+  if(mode==='none') return obsDeg;
+  if(mode==='lorentz') return obsDeg - instDeg;
+  return Math.sqrt(Math.max(obsDeg*obsDeg - instDeg*instDeg, 0)); // gauss
+}
+document.getElementById('calcSizeStrainBtn').addEventListener('click', ()=>{
+  const instB = parseFloat(document.getElementById('instFWHM').value)||0;
+  const mode = document.getElementById('corrMode').value;
+  const K = parseFloat(document.getElementById('kFactor').value)||0.9;
+  const rows = document.querySelectorAll('.peak-input-row');
+  const pts = []; let single = null; const badRows = [];
+  rows.forEach(r=>{
+    const t2 = parseFloat(r.querySelector('.peak-2theta').value);
+    const fwhm = parseFloat(r.querySelector('.peak-fwhm').value);
+    if(isFinite(t2)&&isFinite(fwhm)){
+      const betaDeg = correctedBeta(fwhm, instB, mode);
+      if(betaDeg<=0){ badRows.push(t2.toFixed(2)+'°'); return; }
+      const th = (t2/2)*Math.PI/180, beta = betaDeg*Math.PI/180;
+      single = {th, beta};
+      pts.push({x:4*Math.sin(th), y:beta*Math.cos(th)});
+    }
+  });
+  const res = document.getElementById('sizeStrainResult');
+  res.style.display='block';
+  if(badRows.length){ res.className='warn-box'; res.innerHTML='以下峰校正后 β≤0（FWHM 不大于仪器展宽），已剔除：'+badRows.join('，')+'。这类峰给不出尺寸信息。'; if(!pts.length) return; }
+  if(!pts.length){ alert('请至少输入一个峰的 2θ 和 FWHM。'); return; }
+  if(pts.length===1){
+    const sizeNm = (K*WAVELENGTH)/(single.beta*Math.cos(single.th))/10;
+    res.className = sizeNm>200 ? 'warn-box' : 'info-box';
+    res.innerHTML = '<strong>单峰 Scherrer</strong>（假设无应变）：晶粒域尺寸 ≈ <strong>'+sizeNm.toFixed(1)+' nm</strong>' +
+      (sizeNm>200 ? '<br>⚠️ 超过 ~200 nm：展宽已由仪器主导，这个数不可信，只能说"域尺寸大于仪器分辨极限"。' : '') +
+      (sizeNm<2 ? '<br>⚠️ 小于 2 nm 不合理，八成是 FWHM 量错了（量到了背底宽度？）。' : '');
+    return;
+  }
+  // Williamson-Hall 线性拟合 + R²
+  const n = pts.length;
+  let sx=0, sy=0, sxy=0, sx2=0;
+  pts.forEach(p=>{sx+=p.x; sy+=p.y; sxy+=p.x*p.y; sx2+=p.x*p.x;});
+  const slope = (n*sxy - sx*sy)/(n*sx2 - sx*sx);
+  const intercept = (sy - slope*sx)/n;
+  const yMean = sy/n;
+  let ssRes=0, ssTot=0;
+  pts.forEach(p=>{ const yp = intercept + slope*p.x; ssRes+=(p.y-yp)*(p.y-yp); ssTot+=(p.y-yMean)*(p.y-yMean); });
+  const r2 = ssTot>0 ? 1 - ssRes/ssTot : 0;
+  let html = '<strong>Williamson–Hall</strong>（'+n+' 个峰，拟合 R² = '+r2.toFixed(3)+'）：<br>';
+  if(intercept<=0) html += '⚠️ 截距 ≤0，无法给出尺寸——峰宽随角度的趋势全被应变项吃掉了，或 FWHM 数据有问题。只能报应变趋势，不能报尺寸。<br>';
+  else {
+    const sizeNm = (K*WAVELENGTH)/intercept/10;
+    html += '晶粒域尺寸 ≈ <strong>'+(sizeNm>500?'> 500 nm（仪器极限）':sizeNm.toFixed(1)+' nm')+'</strong><br>';
+    if(sizeNm>200) html += '⚠️ 同上，>200 nm 的 Scherrer/W-H 尺寸不可当真。<br>';
+  }
+  html += '微应变 ε ≈ <strong>'+slope.toFixed(4)+' ('+(slope*100).toFixed(3)+'%)</strong>';
+  if(slope<0) html += '<br>⚠️ 斜率为负（负应变）在物理上通常意味着 FWHM 数据不一致（如高角峰量窄了），请复核拟合。';
+  if(r2<0.8) html += '<br>⚠️ R² 偏低：各峰不共线，可能存在各向异性展宽（位错衬度、弹性各向异性），单一 W-H 直线不适用。';
+  res.className = (intercept<=0||r2<0.8) ? 'warn-box' : 'info-box';
+  res.innerHTML = html;
+});
+</script>
+</body>
+</html>
